@@ -121,10 +121,22 @@
 		}
 	}
 
-	function getCardName(id: string): string {
+	function isUrl(value: string): boolean {
+		return value.startsWith('http://') || value.startsWith('https://');
+	}
+
+	function getEndpointName(value: string): string {
+		if (isUrl(value)) {
+			try {
+				const u = new URL(value);
+				return u.hostname.replace(/^www\./, '');
+			} catch {
+				return value;
+			}
+		}
 		const cards = $allCards ?? [];
-		const c = cards.find((c) => c.cardId === id);
-		if (!c) return id.slice(0, 8) + '…';
+		const c = cards.find((c) => c.cardId === value);
+		if (!c) return value.slice(0, 8) + '…';
 		if (c.type === 'URL') return c.title || c.url;
 		return c.text.slice(0, 50);
 	}
@@ -250,12 +262,12 @@
 						<a href="/connections/{conn.connectionId}" class="connection-item">
 							<span class="conn-type">{conn.type}</span>
 							<span class="conn-arrow">→</span>
-							<span class="conn-card">{getCardName(conn.targetCardId)}</span>
+							<span class="conn-card">{getEndpointName(conn.targetCardId)}</span>
 						</a>
 					{/each}
 					{#each $cardConnections?.asTarget ?? [] as conn}
 						<a href="/connections/{conn.connectionId}" class="connection-item">
-							<span class="conn-card">{getCardName(conn.sourceCardId)}</span>
+							<span class="conn-card">{getEndpointName(conn.sourceCardId)}</span>
 							<span class="conn-arrow">→</span>
 							<span class="conn-type">{conn.type}</span>
 						</a>

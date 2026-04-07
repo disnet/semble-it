@@ -7,10 +7,22 @@
 	const connections = liveQuery(() => db.connections.orderBy('createdAt').reverse().toArray());
 	const allCards = liveQuery(() => db.cards.toArray());
 
-	function getCardName(cardId: string): string {
+	function isUrl(value: string): boolean {
+		return value.startsWith('http://') || value.startsWith('https://');
+	}
+
+	function getEndpointName(value: string): string {
+		if (isUrl(value)) {
+			try {
+				const u = new URL(value);
+				return u.hostname.replace(/^www\./, '');
+			} catch {
+				return value;
+			}
+		}
 		const cards = $allCards ?? [];
-		const c = cards.find((c) => c.cardId === cardId);
-		if (!c) return cardId.slice(0, 8) + '…';
+		const c = cards.find((c) => c.cardId === value);
+		if (!c) return value.slice(0, 8) + '…';
 		if (c.type === 'URL') return c.title || c.url;
 		return c.text.slice(0, 50);
 	}
@@ -28,9 +40,9 @@
 		<div class="connection-list">
 			{#each $connections ?? [] as conn (conn.connectionId)}
 				<a href="/connections/{conn.connectionId}" class="connection-item">
-					<span class="conn-source">{getCardName(conn.sourceCardId)}</span>
+					<span class="conn-source">{getEndpointName(conn.sourceCardId)}</span>
 					<span class="conn-type-badge">{conn.type}</span>
-					<span class="conn-target">{getCardName(conn.targetCardId)}</span>
+					<span class="conn-target">{getEndpointName(conn.targetCardId)}</span>
 				</a>
 			{/each}
 		</div>

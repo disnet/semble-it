@@ -255,15 +255,22 @@ export async function deleteCollectionLinkFromPDS(
 
 // --- Connection operations ---
 
+function isUrl(value: string): boolean {
+	return value.startsWith('http://') || value.startsWith('https://');
+}
+
 function connectionToRecord(
 	session: OAuthSession,
 	connection: Connection
 ): Record<string, unknown> {
 	return {
 		$type: NSID.connection,
-		// Use AT URIs for source/target if we have card URIs, otherwise fall back to card IDs
-		source: cardAtUri(session.did, connection.sourceCardId),
-		target: cardAtUri(session.did, connection.targetCardId),
+		source: isUrl(connection.sourceCardId)
+			? connection.sourceCardId
+			: cardAtUri(session.did, connection.sourceCardId),
+		target: isUrl(connection.targetCardId)
+			? connection.targetCardId
+			: cardAtUri(session.did, connection.targetCardId),
 		connectionType: connection.type,
 		...(connection.note && { note: connection.note }),
 		createdAt:

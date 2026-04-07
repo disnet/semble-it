@@ -18,12 +18,28 @@
 	let editNote = $state('');
 	let confirmDelete = $state(false);
 
-	function getCardName(cardId: string): string {
+	function isUrl(value: string): boolean {
+		return value.startsWith('http://') || value.startsWith('https://');
+	}
+
+	function getEndpointName(value: string): string {
+		if (isUrl(value)) {
+			try {
+				const u = new URL(value);
+				return u.hostname.replace(/^www\./, '');
+			} catch {
+				return value;
+			}
+		}
 		const cards = $allCards ?? [];
-		const c = cards.find((c) => c.cardId === cardId);
-		if (!c) return cardId.slice(0, 8) + '…';
+		const c = cards.find((c) => c.cardId === value);
+		if (!c) return value.slice(0, 8) + '…';
 		if (c.type === 'URL') return c.title || c.url;
 		return c.text.slice(0, 80);
+	}
+
+	function endpointHref(value: string): string {
+		return isUrl(value) ? value : `/cards/${value}`;
 	}
 
 	function startEdit() {
@@ -59,12 +75,20 @@
 	<div class="detail-container">
 		{#if !editing}
 			<div class="conn-visual">
-				<a href="/cards/{$connection.sourceCardId}" class="conn-card-link">
-					{getCardName($connection.sourceCardId)}
+				<a
+					href={endpointHref($connection.sourceCardId)}
+					class="conn-card-link"
+					{...(isUrl($connection.sourceCardId) ? { target: '_blank', rel: 'noopener' } : {})}
+				>
+					{getEndpointName($connection.sourceCardId)}
 				</a>
 				<div class="conn-type-display">{$connection.type.replace('_', ' ')}</div>
-				<a href="/cards/{$connection.targetCardId}" class="conn-card-link">
-					{getCardName($connection.targetCardId)}
+				<a
+					href={endpointHref($connection.targetCardId)}
+					class="conn-card-link"
+					{...(isUrl($connection.targetCardId) ? { target: '_blank', rel: 'noopener' } : {})}
+				>
+					{getEndpointName($connection.targetCardId)}
 				</a>
 			</div>
 
