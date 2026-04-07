@@ -6,6 +6,9 @@ export interface CardBase {
 	createdAt: Date;
 	updatedAt: Date;
 	parentCardId?: string;
+	// PDS references
+	uri?: string;
+	cid?: string;
 }
 
 export interface UrlCard extends CardBase {
@@ -37,12 +40,18 @@ export interface Collection {
 	description?: string;
 	createdAt: Date;
 	updatedAt: Date;
+	// PDS references
+	uri?: string;
+	cid?: string;
 }
 
 export interface CollectionCard {
 	collectionId: string;
 	cardId: string;
 	addedAt: Date;
+	// PDS references
+	uri?: string;
+	cid?: string;
 }
 
 export const CONNECTION_TYPES = [
@@ -66,4 +75,7 @@ export interface Connection {
 	note?: string;
 	createdAt: Date;
 	updatedAt: Date;
+	// PDS references
+	uri?: string;
+	cid?: string;
 }

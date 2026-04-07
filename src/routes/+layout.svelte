@@ -4,15 +4,27 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
+	import { syncFromPDS } from '$lib/pds';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import FAB from '$lib/components/layout/FAB.svelte';
 
 	let { children } = $props();
 
 	const isLoginPage = $derived($page.url.pathname === '/login');
+	let syncing = $state(false);
 
 	onMount(async () => {
 		await auth.init();
+		if (auth.isLoggedIn && auth.session) {
+			syncing = true;
+			try {
+				await syncFromPDS(auth.session);
+			} catch (e) {
+				console.error('PDS sync failed:', e);
+			} finally {
+				syncing = false;
+			}
+		}
 		if (!auth.isLoggedIn && !isLoginPage) {
 			goto('/login', { replaceState: true });
 		}

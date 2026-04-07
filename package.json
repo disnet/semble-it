@@ -21,6 +21,7 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@atproto/api": "^0.19.6",
 		"@atproto/oauth-client-browser": "^0.3.41",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"dexie": "^4.4.2",

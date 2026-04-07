@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { createConnectionInPDS } from '$lib/pds';
 	import { CONNECTION_TYPES, type ConnectionType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardPicker from '$lib/components/cards/CardPicker.svelte';
@@ -29,7 +31,7 @@
 		try {
 			const connectionId = crypto.randomUUID();
 			const now = new Date();
-			await db.connections.add({
+			const connection: import('$lib/types').Connection = {
 				connectionId,
 				sourceCardId,
 				targetCardId,
@@ -37,8 +39,15 @@
 				note: note.trim() || undefined,
 				createdAt: now,
 				updatedAt: now
-			});
-			goto(`/connections/${connectionId}`);
+			};
+			if (auth.session) {
+				const ref = await createConnectionInPDS(auth.session, connection);
+				connection.uri = ref.uri;
+				connection.cid = ref.cid;
+				connection.connectionId = ref.uri.split('/').pop()!;
+			}
+			await db.connections.add(connection);
+			goto(`/connections/${connection.connectionId}`);
 		} finally {
 			saving = false;
 		}

@@ -2,7 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { db } from '$lib/db';
-	import type { CardType } from '$lib/types';
+	import { auth } from '$lib/auth.svelte';
+	import { createCardInPDS } from '$lib/pds';
+	import type { Card, CardType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
 	let cardType: CardType = $state(($page.url.searchParams.get('type') as CardType) || 'URL');
@@ -30,25 +32,38 @@
 			const cardId = crypto.randomUUID();
 			const base = { cardId, createdAt: now, updatedAt: now };
 
+			let card: Card | null = null;
+
 			if (cardType === 'URL') {
 				if (!url.trim()) return;
-				await db.cards.add({ ...base, type: 'URL', url: url.trim(), title: title.trim() || undefined, description: description.trim() || undefined });
+				card = { ...base, type: 'URL', url: url.trim(), title: title.trim() || undefined, description: description.trim() || undefined };
 			} else if (cardType === 'NOTE') {
 				if (!noteText.trim()) return;
-				await db.cards.add({ ...base, type: 'NOTE', text: noteText.trim() });
+				card = { ...base, type: 'NOTE', text: noteText.trim() };
 			} else if (cardType === 'HIGHLIGHT') {
 				if (!highlightText.trim() || !sourceUrl.trim()) return;
-				await db.cards.add({
+				card = {
 					...base,
 					type: 'HIGHLIGHT',
 					text: highlightText.trim(),
 					sourceUrl: sourceUrl.trim(),
 					sourceTitle: sourceTitle.trim() || undefined,
 					context: context.trim() || undefined
-				});
+				};
 			}
 
-			goto(`/cards/${cardId}`);
+			if (card) {
+				if (auth.session) {
+					const ref = await createCardInPDS(auth.session, card);
+					card.uri = ref.uri;
+					card.cid = ref.cid;
+					// Use PDS-assigned TID as the card ID
+					card.cardId = ref.uri.split('/').pop()!;
+				}
+				await db.cards.add(card);
+			}
+
+			goto(`/cards/${card?.cardId ?? cardId}`);
 		} finally {
 			saving = false;
 		}

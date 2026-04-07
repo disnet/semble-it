@@ -15,6 +15,12 @@ class AssembleDB extends Dexie {
 			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt',
 			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt'
 		});
+		this.version(2).stores({
+			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt, uri',
+			collections: 'collectionId, name, createdAt, uri',
+			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
+			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt, uri'
+		});
 	}
 }
 

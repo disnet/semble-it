@@ -3,10 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { updateConnectionInPDS, deleteConnectionFromPDS } from '$lib/pds';
 	import { CONNECTION_TYPES, type ConnectionType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
-	const connectionId = $derived($page.params.connectionId);
+	const connectionId = $derived($page.params.connectionId!);
 
 	const connection = liveQuery(() => db.connections.get(connectionId));
 	const allCards = liveQuery(() => db.cards.toArray());
@@ -32,15 +34,20 @@
 	}
 
 	async function saveEdit() {
-		await db.connections.update(connectionId, {
+		if (!$connection) return;
+		const updated = {
+			...$connection,
 			type: editType,
 			note: editNote.trim() || undefined,
 			updatedAt: new Date()
-		});
+		};
+		if (auth.session) await updateConnectionInPDS(auth.session, updated);
+		await db.connections.put(updated);
 		editing = false;
 	}
 
 	async function deleteConnection() {
+		if (auth.session && $connection) await deleteConnectionFromPDS(auth.session, $connection);
 		await db.connections.delete(connectionId);
 		goto('/connections');
 	}

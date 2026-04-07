@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { createCardInPDS, createCollectionInPDS, createConnectionInPDS, syncFromPDS, deleteCardFromPDS, deleteCollectionFromPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
 	let importing = $state(false);
@@ -41,6 +43,36 @@
 				const text = await file.text();
 				const data = JSON.parse(text);
 
+				// Push to PDS and update local DB with PDS refs
+				if (auth.session) {
+					if (data.cards) {
+						for (const card of data.cards) {
+							const ref = await createCardInPDS(auth.session, card);
+							card.uri = ref.uri;
+							card.cid = ref.cid;
+							card.cardId = ref.uri.split('/').pop()!;
+						}
+					}
+					if (data.collections) {
+						for (const col of data.collections) {
+							const ref = await createCollectionInPDS(auth.session, col);
+							col.uri = ref.uri;
+							col.cid = ref.cid;
+							col.collectionId = ref.uri.split('/').pop()!;
+						}
+					}
+					if (data.connections) {
+						for (const conn of data.connections) {
+							const ref = await createConnectionInPDS(auth.session, conn);
+							conn.uri = ref.uri;
+							conn.cid = ref.cid;
+							conn.connectionId = ref.uri.split('/').pop()!;
+						}
+					}
+					// Note: collectionCards/links need card+collection refs,
+					// skip for import — sync from PDS after to get proper state
+				}
+
 				await db.transaction('rw', [db.cards, db.collections, db.collectionCards, db.connections], async () => {
 					if (data.cards) await db.cards.bulkPut(data.cards);
 					if (data.collections) await db.collections.bulkPut(data.collections);
@@ -63,6 +95,21 @@
 	let confirmClear = $state(false);
 
 	async function clearAllData() {
+		// Delete all records from PDS
+		if (auth.session) {
+			const [cards, collections, collectionCards, connections] = await Promise.all([
+				db.cards.toArray(),
+				db.collections.toArray(),
+				db.collectionCards.toArray(),
+				db.connections.toArray()
+			]);
+			const promises: Promise<void>[] = [];
+			for (const c of cards) promises.push(deleteCardFromPDS(auth.session, c));
+			for (const c of collections) promises.push(deleteCollectionFromPDS(auth.session, c));
+			for (const cc of collectionCards) promises.push(deleteCollectionLinkFromPDS(auth.session, cc));
+			for (const c of connections) promises.push(deleteConnectionFromPDS(auth.session, c));
+			await Promise.all(promises);
+		}
 		await db.transaction('rw', [db.cards, db.collections, db.collectionCards, db.connections], async () => {
 			await db.cards.clear();
 			await db.collections.clear();

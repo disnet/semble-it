@@ -3,11 +3,13 @@
 	import { goto } from '$app/navigation';
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { updateCollectionInPDS, deleteCollectionFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 
-	const collectionId = $derived($page.params.collectionId);
+	const collectionId = $derived($page.params.collectionId!);
 
 	const collection = liveQuery(() => db.collections.get(collectionId));
 
@@ -38,16 +40,26 @@
 	}
 
 	async function saveEdit() {
-		if (!editName.trim()) return;
-		await db.collections.update(collectionId, {
+		if (!editName.trim() || !$collection) return;
+		const updated = {
+			...$collection,
 			name: editName.trim(),
 			description: editDescription.trim() || undefined,
 			updatedAt: new Date()
-		});
+		};
+		if (auth.session) await updateCollectionInPDS(auth.session, updated);
+		await db.collections.put(updated);
 		editing = false;
 	}
 
 	async function deleteCollection() {
+		if (auth.session && $collection) {
+			const ccLinks = await db.collectionCards.where('collectionId').equals(collectionId).toArray();
+			await Promise.all([
+				deleteCollectionFromPDS(auth.session, $collection),
+				...ccLinks.map((cc) => deleteCollectionLinkFromPDS(auth.session!, cc))
+			]);
+		}
 		await db.transaction('rw', [db.collections, db.collectionCards], async () => {
 			await db.collections.delete(collectionId);
 			await db.collectionCards.where('collectionId').equals(collectionId).delete();
@@ -57,9 +69,19 @@
 
 	async function toggleCard(cardId: string, isMember: boolean) {
 		if (isMember) {
+			const ccLink = ($cardLinks ?? []).find((l) => l.cardId === cardId);
+			if (auth.session && ccLink) await deleteCollectionLinkFromPDS(auth.session, ccLink);
 			await db.collectionCards.where('[collectionId+cardId]').equals([collectionId, cardId]).delete();
 		} else {
-			await db.collectionCards.add({ collectionId, cardId, addedAt: new Date() });
+			const card = ($allCards ?? []).find((c) => c.cardId === cardId);
+			const col = $collection;
+			const cc = { collectionId, cardId, addedAt: new Date() } as import('$lib/types').CollectionCard;
+			if (auth.session && card && col) {
+				const ref = await createCollectionLinkInPDS(auth.session, card, col);
+				cc.uri = ref.uri;
+				cc.cid = ref.cid;
+			}
+			await db.collectionCards.add(cc);
 		}
 	}
 </script>

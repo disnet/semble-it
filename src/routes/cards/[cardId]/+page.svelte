@@ -3,12 +3,14 @@
 	import { goto } from '$app/navigation';
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { updateCardInPDS, deleteCardFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS } from '$lib/pds';
 	import type { Card, CardType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardTypeBadge from '$lib/components/cards/CardTypeBadge.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 
-	const cardId = $derived($page.params.cardId);
+	const cardId = $derived($page.params.cardId!);
 
 	const card = liveQuery(() => db.cards.get(cardId));
 
@@ -63,17 +65,35 @@
 		if (!c) return;
 		const now = new Date();
 
+		let updated: Card;
 		if (c.type === 'URL') {
-			await db.cards.update(cardId, { url: editUrl.trim(), title: editTitle.trim() || undefined, description: editDescription.trim() || undefined, updatedAt: now });
+			updated = { ...c, url: editUrl.trim(), title: editTitle.trim() || undefined, description: editDescription.trim() || undefined, updatedAt: now };
 		} else if (c.type === 'NOTE') {
-			await db.cards.update(cardId, { text: editText.trim(), updatedAt: now });
-		} else if (c.type === 'HIGHLIGHT') {
-			await db.cards.update(cardId, { text: editText.trim(), sourceUrl: editSourceUrl.trim(), sourceTitle: editSourceTitle.trim() || undefined, context: editContext.trim() || undefined, updatedAt: now });
+			updated = { ...c, text: editText.trim(), updatedAt: now };
+		} else {
+			updated = { ...c, text: editText.trim(), sourceUrl: editSourceUrl.trim(), sourceTitle: editSourceTitle.trim() || undefined, context: editContext.trim() || undefined, updatedAt: now };
 		}
+
+		if (auth.session) await updateCardInPDS(auth.session, updated);
+		await db.cards.put(updated);
 		editing = false;
 	}
 
 	async function deleteCard() {
+		const c = $card;
+		if (auth.session && c) {
+			const [ccLinks, srcConns, tgtConns] = await Promise.all([
+				db.collectionCards.where('cardId').equals(cardId).toArray(),
+				db.connections.where('sourceCardId').equals(cardId).toArray(),
+				db.connections.where('targetCardId').equals(cardId).toArray()
+			]);
+			await Promise.all([
+				deleteCardFromPDS(auth.session, c),
+				...ccLinks.map((cc) => deleteCollectionLinkFromPDS(auth.session!, cc)),
+				...srcConns.map((conn) => deleteConnectionFromPDS(auth.session!, conn)),
+				...tgtConns.map((conn) => deleteConnectionFromPDS(auth.session!, conn))
+			]);
+		}
 		await db.transaction('rw', [db.cards, db.collectionCards, db.connections], async () => {
 			await db.cards.delete(cardId);
 			await db.collectionCards.where('cardId').equals(cardId).delete();
@@ -83,11 +103,21 @@
 		goto('/cards');
 	}
 
-	async function toggleCollection(collectionId: string, isMember: boolean) {
+	async function toggleCollection(colId: string, isMember: boolean) {
 		if (isMember) {
-			await db.collectionCards.where('[collectionId+cardId]').equals([collectionId, cardId]).delete();
+			const ccLink = ($cardCollections ?? []).find((cc) => cc.collectionId === colId);
+			if (auth.session && ccLink) await deleteCollectionLinkFromPDS(auth.session, ccLink);
+			await db.collectionCards.where('[collectionId+cardId]').equals([colId, cardId]).delete();
 		} else {
-			await db.collectionCards.add({ collectionId, cardId, addedAt: new Date() });
+			const c = $card;
+			const col = ($collections ?? []).find((col) => col.collectionId === colId);
+			const cc = { collectionId: colId, cardId, addedAt: new Date() } as import('$lib/types').CollectionCard;
+			if (auth.session && c && col) {
+				const ref = await createCollectionLinkInPDS(auth.session, c, col);
+				cc.uri = ref.uri;
+				cc.cid = ref.cid;
+			}
+			await db.collectionCards.add(cc);
 		}
 	}
 

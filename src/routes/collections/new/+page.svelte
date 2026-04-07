@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { createCollectionInPDS } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
 	let name = $state('');
@@ -13,14 +15,21 @@
 		try {
 			const collectionId = crypto.randomUUID();
 			const now = new Date();
-			await db.collections.add({
+			const collection: import('$lib/types').Collection = {
 				collectionId,
 				name: name.trim(),
 				description: description.trim() || undefined,
 				createdAt: now,
 				updatedAt: now
-			});
-			goto(`/collections/${collectionId}`);
+			};
+			if (auth.session) {
+				const ref = await createCollectionInPDS(auth.session, collection);
+				collection.uri = ref.uri;
+				collection.cid = ref.cid;
+				collection.collectionId = ref.uri.split('/').pop()!;
+			}
+			await db.collections.add(collection);
+			goto(`/collections/${collection.collectionId}`);
 		} finally {
 			saving = false;
 		}
