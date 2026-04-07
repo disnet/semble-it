@@ -21,7 +21,6 @@
 			cards = cards.filter((c) => {
 				if (c.type === 'URL') return c.url.toLowerCase().includes(q) || c.title?.toLowerCase().includes(q);
 				if (c.type === 'NOTE') return c.text.toLowerCase().includes(q);
-				if (c.type === 'HIGHLIGHT') return c.text.toLowerCase().includes(q) || c.sourceTitle?.toLowerCase().includes(q);
 				return false;
 			});
 		}

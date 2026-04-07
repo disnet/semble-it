@@ -8,8 +8,7 @@
 	const filters: { label: string; value: FilterValue }[] = [
 		{ label: 'All', value: 'ALL' },
 		{ label: 'URL', value: 'URL' },
-		{ label: 'Note', value: 'NOTE' },
-		{ label: 'Highlight', value: 'HIGHLIGHT' }
+		{ label: 'Note', value: 'NOTE' }
 	];
 </script>
 

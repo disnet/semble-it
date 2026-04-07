@@ -10,8 +10,6 @@
 				return card.title || card.url;
 			case 'NOTE':
 				return card.text.slice(0, 100);
-			case 'HIGHLIGHT':
-				return card.text.slice(0, 100);
 		}
 	}
 
@@ -21,8 +19,6 @@
 				return card.description || card.url;
 			case 'NOTE':
 				return card.text.length > 100 ? card.text.slice(100, 200) + '…' : '';
-			case 'HIGHLIGHT':
-				return card.sourceTitle || card.sourceUrl;
 		}
 	}
 

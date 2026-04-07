@@ -1,4 +1,4 @@
-export type CardType = 'URL' | 'NOTE' | 'HIGHLIGHT';
+export type CardType = 'URL' | 'NOTE';
 
 export interface CardBase {
 	cardId: string;
@@ -24,15 +24,7 @@ export interface NoteCard extends CardBase {
 	parentCardId?: string;
 }
 
-export interface HighlightCard extends CardBase {
-	type: 'HIGHLIGHT';
-	text: string;
-	sourceUrl: string;
-	sourceTitle?: string;
-	context?: string;
-}
-
-export type Card = UrlCard | NoteCard | HighlightCard;
+export type Card = UrlCard | NoteCard;
 
 export interface Collection {
 	collectionId: string;

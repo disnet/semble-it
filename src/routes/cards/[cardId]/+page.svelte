@@ -5,7 +5,7 @@
 	import { db } from '$lib/db';
 	import { auth } from '$lib/auth.svelte';
 	import { updateCardInPDS, deleteCardFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS } from '$lib/pds';
-	import type { Card, CardType } from '$lib/types';
+	import type { Card } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardTypeBadge from '$lib/components/cards/CardTypeBadge.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
@@ -40,9 +40,6 @@
 	let editTitle = $state('');
 	let editDescription = $state('');
 	let editText = $state('');
-	let editSourceUrl = $state('');
-	let editSourceTitle = $state('');
-	let editContext = $state('');
 
 	function startEdit(c: Card) {
 		editing = true;
@@ -52,11 +49,6 @@
 			editDescription = c.description ?? '';
 		} else if (c.type === 'NOTE') {
 			editText = c.text;
-		} else if (c.type === 'HIGHLIGHT') {
-			editText = c.text;
-			editSourceUrl = c.sourceUrl;
-			editSourceTitle = c.sourceTitle ?? '';
-			editContext = c.context ?? '';
 		}
 	}
 
@@ -68,10 +60,8 @@
 		let updated: Card;
 		if (c.type === 'URL') {
 			updated = { ...c, url: editUrl.trim(), title: editTitle.trim() || undefined, description: editDescription.trim() || undefined, updatedAt: now };
-		} else if (c.type === 'NOTE') {
-			updated = { ...c, text: editText.trim(), updatedAt: now };
 		} else {
-			updated = { ...c, text: editText.trim(), sourceUrl: editSourceUrl.trim(), sourceTitle: editSourceTitle.trim() || undefined, context: editContext.trim() || undefined, updatedAt: now };
+			updated = { ...c, text: editText.trim(), updatedAt: now };
 		}
 
 		if (auth.session) await updateCardInPDS(auth.session, updated);
@@ -150,7 +140,7 @@
 	}
 </script>
 
-<PageHeader title={$card ? ($card.type === 'URL' ? ($card.title || 'URL Card') : $card.type === 'NOTE' ? 'Note' : 'Highlight') : 'Card'} />
+<PageHeader title={$card ? ($card.type === 'URL' ? ($card.title || 'URL Card') : 'Note') : 'Card'} />
 
 {#if $card}
 	<div class="detail-container">
@@ -168,14 +158,6 @@
 				{/if}
 			{:else if $card.type === 'NOTE'}
 				<p class="card-text">{$card.text}</p>
-			{:else if $card.type === 'HIGHLIGHT'}
-				<blockquote class="card-highlight">{$card.text}</blockquote>
-				<a href={$card.sourceUrl} target="_blank" rel="noopener" class="card-url">
-					{$card.sourceTitle || $card.sourceUrl}
-				</a>
-				{#if $card.context}
-					<p class="card-context">{$card.context}</p>
-				{/if}
 			{/if}
 
 			<div class="actions">
@@ -202,23 +184,6 @@
 					<label class="field">
 						<span class="field-label">Note</span>
 						<textarea bind:value={editText} class="field-textarea" rows="6"></textarea>
-					</label>
-				{:else if $card.type === 'HIGHLIGHT'}
-					<label class="field">
-						<span class="field-label">Highlighted text</span>
-						<textarea bind:value={editText} class="field-textarea" rows="4"></textarea>
-					</label>
-					<label class="field">
-						<span class="field-label">Source URL</span>
-						<input type="url" bind:value={editSourceUrl} class="field-input" />
-					</label>
-					<label class="field">
-						<span class="field-label">Source title</span>
-						<input type="text" bind:value={editSourceTitle} class="field-input" />
-					</label>
-					<label class="field">
-						<span class="field-label">Context</span>
-						<textarea bind:value={editContext} class="field-textarea" rows="3"></textarea>
 					</label>
 				{/if}
 				<div class="edit-actions">
@@ -356,23 +321,6 @@
 		line-height: 1.6;
 		color: var(--color-text);
 		margin-bottom: var(--space-md);
-	}
-
-	.card-highlight {
-		font-size: 0.9375rem;
-		line-height: 1.6;
-		padding: var(--space-md);
-		border-left: 3px solid var(--color-highlight);
-		background: var(--color-highlight-bg);
-		border-radius: 0 var(--radius-md) var(--radius-md) 0;
-		margin-bottom: var(--space-sm);
-	}
-
-	.card-context {
-		font-size: 0.8125rem;
-		color: var(--color-text-secondary);
-		line-height: 1.5;
-		margin-top: var(--space-sm);
 	}
 
 	.actions,

@@ -4,7 +4,7 @@
 	let { type }: { type: CardType } = $props();
 </script>
 
-<span class="badge" class:url={type === 'URL'} class:note={type === 'NOTE'} class:highlight={type === 'HIGHLIGHT'}>
+<span class="badge" class:url={type === 'URL'} class:note={type === 'NOTE'}>
 	{type}
 </span>
 
@@ -28,10 +28,5 @@
 	.note {
 		background: var(--color-note-bg);
 		color: var(--color-note);
-	}
-
-	.highlight {
-		background: var(--color-highlight-bg);
-		color: var(--color-highlight);
 	}
 </style>

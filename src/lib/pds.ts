@@ -29,10 +29,10 @@ function collectionAtUri(did: string, rkey: string): string {
 
 // --- Card: local → PDS record ---
 
-function cardToRecord(card: Card): Record<string, unknown> {
+function cardToRecord(card: Card, parentRef?: { uri: string; cid: string }): Record<string, unknown> {
 	const record: Record<string, unknown> = {
 		$type: NSID.card,
-		type: card.type === 'HIGHLIGHT' ? 'NOTE' : card.type,
+		type: card.type,
 		createdAt: card.createdAt instanceof Date ? card.createdAt.toISOString() : card.createdAt
 	};
 
@@ -56,14 +56,8 @@ function cardToRecord(card: Card): Record<string, unknown> {
 			$type: `${BASE_NSID}.card#noteContent`,
 			text: card.text
 		};
-	} else if (card.type === 'HIGHLIGHT') {
-		// Map highlights to NOTE cards with the highlighted text
-		record.content = {
-			$type: `${BASE_NSID}.card#noteContent`,
-			text: card.text
-		};
-		if (card.sourceUrl) {
-			record.url = card.sourceUrl;
+		if (parentRef) {
+			record.parentCard = { uri: parentRef.uri, cid: parentRef.cid };
 		}
 	}
 
@@ -106,13 +100,14 @@ function recordToCard(uri: string, cid: string, value: Record<string, unknown>):
 
 export async function createCardInPDS(
 	session: OAuthSession,
-	card: Card
+	card: Card,
+	parentRef?: { uri: string; cid: string }
 ): Promise<{ uri: string; cid: string }> {
 	const agent = createAgent(session);
 	const response = await agent.com.atproto.repo.createRecord({
 		repo: session.did,
 		collection: NSID.card,
-		record: cardToRecord(card)
+		record: cardToRecord(card, parentRef)
 	});
 	return { uri: response.data.uri, cid: response.data.cid };
 }

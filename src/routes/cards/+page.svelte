@@ -30,13 +30,6 @@
 				if (c.type === 'NOTE') {
 					return c.text.toLowerCase().includes(q);
 				}
-				if (c.type === 'HIGHLIGHT') {
-					return (
-						c.text.toLowerCase().includes(q) ||
-						c.sourceUrl.toLowerCase().includes(q) ||
-						c.sourceTitle?.toLowerCase().includes(q)
-					);
-				}
 				return false;
 			});
 		}

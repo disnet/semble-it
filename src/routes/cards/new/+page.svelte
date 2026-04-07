@@ -4,66 +4,65 @@
 	import { db } from '$lib/db';
 	import { auth } from '$lib/auth.svelte';
 	import { createCardInPDS } from '$lib/pds';
-	import type { Card, CardType } from '$lib/types';
+	import type { Card } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
-	let cardType: CardType = $state(($page.url.searchParams.get('type') as CardType) || 'URL');
-
-	// URL card fields
 	let url = $state($page.url.searchParams.get('url') || '');
 	let title = $state($page.url.searchParams.get('title') || '');
 	let description = $state('');
-
-	// Note card fields
 	let noteText = $state('');
-
-	// Highlight card fields
-	let highlightText = $state('');
-	let sourceUrl = $state('');
-	let sourceTitle = $state('');
-	let context = $state('');
 
 	let saving = $state(false);
 
 	async function save() {
+		if (!url.trim()) return;
 		saving = true;
 		try {
 			const now = new Date();
-			const cardId = crypto.randomUUID();
-			const base = { cardId, createdAt: now, updatedAt: now };
 
-			let card: Card | null = null;
+			// Create URL card
+			const urlCard: Card = {
+				cardId: crypto.randomUUID(),
+				type: 'URL',
+				url: url.trim(),
+				title: title.trim() || undefined,
+				description: description.trim() || undefined,
+				createdAt: now,
+				updatedAt: now
+			};
 
-			if (cardType === 'URL') {
-				if (!url.trim()) return;
-				card = { ...base, type: 'URL', url: url.trim(), title: title.trim() || undefined, description: description.trim() || undefined };
-			} else if (cardType === 'NOTE') {
-				if (!noteText.trim()) return;
-				card = { ...base, type: 'NOTE', text: noteText.trim() };
-			} else if (cardType === 'HIGHLIGHT') {
-				if (!highlightText.trim() || !sourceUrl.trim()) return;
-				card = {
-					...base,
-					type: 'HIGHLIGHT',
-					text: highlightText.trim(),
-					sourceUrl: sourceUrl.trim(),
-					sourceTitle: sourceTitle.trim() || undefined,
-					context: context.trim() || undefined
+			if (auth.session) {
+				const ref = await createCardInPDS(auth.session, urlCard);
+				urlCard.uri = ref.uri;
+				urlCard.cid = ref.cid;
+				urlCard.cardId = ref.uri.split('/').pop()!;
+			}
+			await db.cards.add(urlCard);
+
+			// Optionally create a note card as child
+			if (noteText.trim()) {
+				const noteCard: Card = {
+					cardId: crypto.randomUUID(),
+					type: 'NOTE',
+					text: noteText.trim(),
+					parentCardId: urlCard.cardId,
+					createdAt: now,
+					updatedAt: now
 				};
-			}
 
-			if (card) {
-				if (auth.session) {
-					const ref = await createCardInPDS(auth.session, card);
-					card.uri = ref.uri;
-					card.cid = ref.cid;
-					// Use PDS-assigned TID as the card ID
-					card.cardId = ref.uri.split('/').pop()!;
+				if (auth.session && urlCard.uri && urlCard.cid) {
+					const ref = await createCardInPDS(auth.session, noteCard, {
+						uri: urlCard.uri,
+						cid: urlCard.cid
+					});
+					noteCard.uri = ref.uri;
+					noteCard.cid = ref.cid;
+					noteCard.cardId = ref.uri.split('/').pop()!;
 				}
-				await db.cards.add(card);
+				await db.cards.add(noteCard);
 			}
 
-			goto(`/cards/${card?.cardId ?? cardId}`);
+			goto(`/cards/${urlCard.cardId}`);
 		} finally {
 			saving = false;
 		}
@@ -73,60 +72,27 @@
 <PageHeader title="New Card" />
 
 <div class="form-container">
-	<div class="type-selector">
-		<button class="type-btn" class:active={cardType === 'URL'} onclick={() => (cardType = 'URL')}>
-			URL
-		</button>
-		<button class="type-btn" class:active={cardType === 'NOTE'} onclick={() => (cardType = 'NOTE')}>
-			Note
-		</button>
-		<button
-			class="type-btn"
-			class:active={cardType === 'HIGHLIGHT'}
-			onclick={() => (cardType = 'HIGHLIGHT')}
-		>
-			Highlight
-		</button>
-	</div>
+	<label class="field">
+		<span class="field-label">URL *</span>
+		<input type="url" bind:value={url} placeholder="https://example.com" class="field-input" />
+	</label>
 
-	{#if cardType === 'URL'}
-		<label class="field">
-			<span class="field-label">URL *</span>
-			<input type="url" bind:value={url} placeholder="https://example.com" class="field-input" />
-		</label>
-		<label class="field">
-			<span class="field-label">Title</span>
-			<input type="text" bind:value={title} placeholder="Page title" class="field-input" />
-		</label>
-		<label class="field">
-			<span class="field-label">Description</span>
-			<textarea bind:value={description} placeholder="Brief description" class="field-textarea" rows="3"></textarea>
-		</label>
-	{:else if cardType === 'NOTE'}
-		<label class="field">
-			<span class="field-label">Note *</span>
-			<textarea bind:value={noteText} placeholder="Write your note…" class="field-textarea" rows="6"></textarea>
-		</label>
-	{:else if cardType === 'HIGHLIGHT'}
-		<label class="field">
-			<span class="field-label">Highlighted text *</span>
-			<textarea bind:value={highlightText} placeholder="The highlighted text" class="field-textarea" rows="4"></textarea>
-		</label>
-		<label class="field">
-			<span class="field-label">Source URL *</span>
-			<input type="url" bind:value={sourceUrl} placeholder="https://example.com/article" class="field-input" />
-		</label>
-		<label class="field">
-			<span class="field-label">Source title</span>
-			<input type="text" bind:value={sourceTitle} placeholder="Article title" class="field-input" />
-		</label>
-		<label class="field">
-			<span class="field-label">Context</span>
-			<textarea bind:value={context} placeholder="Surrounding text for context" class="field-textarea" rows="3"></textarea>
-		</label>
-	{/if}
+	<label class="field">
+		<span class="field-label">Title</span>
+		<input type="text" bind:value={title} placeholder="Page title" class="field-input" />
+	</label>
 
-	<button class="save-btn" onclick={save} disabled={saving}>
+	<label class="field">
+		<span class="field-label">Description</span>
+		<textarea bind:value={description} placeholder="Brief description" class="field-textarea" rows="3"></textarea>
+	</label>
+
+	<label class="field">
+		<span class="field-label">Note</span>
+		<textarea bind:value={noteText} placeholder="Add a note about this link…" class="field-textarea" rows="4"></textarea>
+	</label>
+
+	<button class="save-btn" onclick={save} disabled={saving || !url.trim()}>
 		{saving ? 'Saving…' : 'Save Card'}
 	</button>
 </div>
@@ -135,32 +101,6 @@
 	.form-container {
 		padding: var(--space-md);
 		max-width: 600px;
-	}
-
-	.type-selector {
-		display: flex;
-		gap: var(--space-xs);
-		margin-bottom: var(--space-lg);
-		background: var(--color-bg);
-		border-radius: var(--radius-md);
-		padding: 4px;
-	}
-
-	.type-btn {
-		flex: 1;
-		padding: var(--space-sm);
-		border-radius: var(--radius-sm);
-		font-size: 0.875rem;
-		font-weight: 500;
-		transition:
-			background 0.15s,
-			color 0.15s;
-	}
-
-	.type-btn.active {
-		background: var(--color-surface);
-		color: var(--color-primary);
-		box-shadow: var(--shadow-sm);
 	}
 
 	.field {
