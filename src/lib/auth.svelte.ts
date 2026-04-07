@@ -1,6 +1,6 @@
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
-import { atprotoLoopbackClientMetadata } from '@atproto/oauth-types';
+import { buildAtprotoLoopbackClientMetadata } from '@atproto/oauth-types';
 
 let client: BrowserOAuthClient | null = null;
 let session: OAuthSession | null = $state(null);
@@ -16,8 +16,10 @@ async function getClient(): Promise<BrowserOAuthClient> {
 		// Build a loopback client ID pointing redirect to the root path
 		const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
 		const redirectUri = `http://${host}:${window.location.port}/`;
-		const clientId = `http://localhost?redirect_uri=${encodeURIComponent(redirectUri)}`;
-		const clientMetadata = atprotoLoopbackClientMetadata(clientId);
+		const clientMetadata = buildAtprotoLoopbackClientMetadata({
+			scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection',
+			redirect_uris: [redirectUri]
+		});
 
 		client = new BrowserOAuthClient({
 			clientMetadata,
@@ -72,7 +74,8 @@ export const auth = {
 		try {
 			const c = await getClient();
 			await c.signIn(handle, {
-				state: 'login'
+				state: 'login',
+				scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection'
 			});
 			// signIn redirects — this line is not reached
 		} catch (e: any) {
