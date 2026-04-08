@@ -36,11 +36,27 @@ self.addEventListener('fetch', (event) => {
 	// Skip non-local requests
 	if (url.origin !== self.location.origin) return;
 
+	// Navigation requests (HTML pages): network-first so updates are seen immediately
+	if (event.request.mode === 'navigate') {
+		event.respondWith(
+			fetch(event.request)
+				.then((response) => {
+					if (response.status === 200) {
+						const clone = response.clone();
+						caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+					}
+					return response;
+				})
+				.catch(() => caches.match(event.request).then((cached) => cached ?? Response.error()))
+		);
+		return;
+	}
+
+	// Static assets: cache-first
 	event.respondWith(
 		caches.match(event.request).then((cached) => {
 			if (cached) return cached;
 			return fetch(event.request).then((response) => {
-				// Cache successful responses for app shell
 				if (response.status === 200) {
 					const clone = response.clone();
 					caches.open(CACHE).then((cache) => cache.put(event.request, clone));

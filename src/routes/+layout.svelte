@@ -14,6 +14,15 @@
 	let syncing = $state(false);
 
 	onMount(async () => {
+		// Reload when a new service worker takes control so updates are applied immediately
+		let reloading = false;
+		navigator.serviceWorker?.addEventListener('controllerchange', () => {
+			if (!reloading) {
+				reloading = true;
+				window.location.reload();
+			}
+		});
+
 		await auth.init();
 		if (auth.isLoggedIn && auth.session) {
 			syncing = true;
