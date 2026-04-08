@@ -1,7 +1,6 @@
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { buildAtprotoLoopbackClientMetadata } from '@atproto/oauth-types';
-import { Agent } from '@atproto/api';
 
 let client: BrowserOAuthClient | null = null;
 let session: OAuthSession | null = $state(null);
@@ -69,14 +68,16 @@ export const auth = {
 			const result = await c.init();
 			if (result) {
 				session = result.session;
-				try {
-					const publicAgent = new Agent('https://public.api.bsky.app');
-					const profile = await publicAgent.getProfile({ actor: session.did });
-					handle = profile.data.handle;
-					avatar = profile.data.avatar ?? null;
-				} catch {
-					// profile fetch is best-effort
-				}
+				// Fire and forget — don't block loading on profile fetch
+				fetch(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(session.did)}`)
+					.then((res) => res.ok ? res.json() : null)
+					.then((profile) => {
+						if (profile) {
+							handle = profile.handle;
+							avatar = profile.avatar ?? null;
+						}
+					})
+					.catch(() => {});
 			}
 		} catch (e: any) {
 			console.error('Auth init failed:', e);
