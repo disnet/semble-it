@@ -1,7 +1,27 @@
 import { Agent } from '@atproto/api';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { db } from './db';
+import { auth } from './auth.svelte';
 import type { Card, Collection, CollectionCard, Connection } from './types';
+
+function isExpiredAuthError(e: unknown): boolean {
+	const status = (e as any)?.status ?? (e as any)?.response?.status;
+	if (status === 401) return true;
+	const message = String((e as any)?.message ?? '').toLowerCase();
+	return message.includes('expired') || message.includes('invalid token') || message.includes('token revoked');
+}
+
+/**
+ * Check if an error indicates an expired/invalid auth session.
+ * If so, trigger logout and return true.
+ */
+export async function handleExpiredAuth(e: unknown): Promise<boolean> {
+	if (isExpiredAuthError(e)) {
+		await auth.logout();
+		return true;
+	}
+	return false;
+}
 
 const BASE_NSID = 'network.cosmik';
 const NSID = {
@@ -12,7 +32,22 @@ const NSID = {
 } as const;
 
 function createAgent(session: OAuthSession): Agent {
-	return new Agent(session);
+	// Wrap the session's fetchHandler to detect expired auth and trigger logout
+	const wrappedSession = Object.create(session, {
+		fetchHandler: {
+			value: async (pathname: string, init: RequestInit) => {
+				try {
+					return await session.fetchHandler(pathname, init);
+				} catch (e) {
+					if (isExpiredAuthError(e)) {
+						auth.logout();
+					}
+					throw e;
+				}
+			}
+		}
+	});
+	return new Agent(wrappedSession);
 }
 
 function rkeyFromUri(uri: string): string {
