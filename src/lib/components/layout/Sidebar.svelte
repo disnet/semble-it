@@ -77,7 +77,10 @@
 
 	{#if auth.did}
 		<div class="sidebar-footer">
-			<span class="user-did" title={auth.did}>{auth.did}</span>
+			{#if auth.avatar}
+				<img class="user-avatar" src={auth.avatar} alt="" />
+			{/if}
+			<span class="user-handle" title={auth.did}>@{auth.handle ?? auth.did}</span>
 		</div>
 	{/if}
 </nav>
@@ -186,14 +189,24 @@
 	.sidebar-footer {
 		padding: var(--space-sm) var(--space-md);
 		border-top: 1px solid var(--color-border);
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 
-	.user-did {
-		font-size: 0.6875rem;
+	.user-avatar {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		flex-shrink: 0;
+		object-fit: cover;
+	}
+
+	.user-handle {
+		font-size: 0.8125rem;
 		color: var(--color-text-secondary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		display: block;
 	}
 </style>
