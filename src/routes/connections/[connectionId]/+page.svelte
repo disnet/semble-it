@@ -37,7 +37,7 @@
 	}
 
 	function endpointHref(value: string): string {
-		return isUrl(value) ? value : `/cards/${value}`;
+		return isUrl(value) ? value : '/cards';
 	}
 
 	function startEdit() {

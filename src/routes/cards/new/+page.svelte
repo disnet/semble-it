@@ -62,7 +62,7 @@
 				await db.cards.add(noteCard);
 			}
 
-			goto(`/cards/${urlCard.cardId}`);
+			goto('/cards');
 		} finally {
 			saving = false;
 		}
