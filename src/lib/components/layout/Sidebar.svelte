@@ -5,7 +5,7 @@
 	import { db } from '$lib/db';
 	import { sidebarState } from '$lib/sidebar-state.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { LayoutGrid, Link2, Settings, Plus, LogOut } from 'lucide-svelte';
+	import { LayoutGrid, Settings, Plus, LogOut } from 'lucide-svelte';
 
 	const collections = liveQuery(() => db.collections.orderBy('name').toArray());
 
@@ -32,11 +32,6 @@
 		<a href="/cards" class="nav-item" class:active={isActive('/cards')} onclick={close}>
 			<LayoutGrid size={20} />
 			<span>All Cards</span>
-		</a>
-
-		<a href="/connections" class="nav-item" class:active={isActive('/connections')} onclick={close}>
-			<Link2 size={20} />
-			<span>All Connections</span>
 		</a>
 
 		<div class="divider"></div>
