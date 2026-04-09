@@ -22,7 +22,7 @@
 		return card.text.slice(0, 80);
 	}
 	let targetCardId = $state<string | undefined>(undefined);
-	let connectionType = $state<ConnectionType | undefined>(undefined);
+	let connectionType = $state<ConnectionType>('RELATED');
 	let note = $state('');
 	let saving = $state(false);
 
