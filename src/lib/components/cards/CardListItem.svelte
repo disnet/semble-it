@@ -35,6 +35,14 @@
 		}
 	}
 
+	function getDomain(url: string): string {
+		try {
+			return new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return url;
+		}
+	}
+
 	function getSubtitle(card: Card): string {
 		switch (card.type) {
 			case 'URL':
@@ -64,7 +72,6 @@
 		if (card.type === 'URL') {
 			updated = {
 				...card,
-				url: editUrl.trim(),
 				title: editTitle.trim() || undefined,
 				description: editDescription.trim() || undefined,
 				updatedAt: now
@@ -75,7 +82,6 @@
 
 		if (auth.session) await updateCardInPDS(auth.session, updated);
 		await db.cards.put(updated);
-		expanded = false;
 	}
 
 	async function deleteCard() {
@@ -110,11 +116,26 @@
 		<div class="card-item-body">
 			<div class="card-item-header">
 				<CardTypeBadge type={card.type} />
-				<span class="card-date">{formatDate(card.createdAt, 'short')}</span>
+				{#if card.type === 'URL'}
+					<a href={card.url} target="_blank" rel="noopener noreferrer" class="url-domain" onclick={(e) => e.stopPropagation()}>
+						{getDomain(card.url)}
+						<svg class="url-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h7v7" /><path d="M13 3L3 13" /></svg>
+					</a>
+				{/if}
+				<span class="card-header-right">
+					{#if expanded}
+						<button class="delete-btn" onclick={(e) => { e.stopPropagation(); confirmDelete = true; }}>
+							<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4M12 4v9.33a1.33 1.33 0 01-1.33 1.34H5.33A1.33 1.33 0 014 13.33V4" /></svg>
+						</button>
+					{/if}
+					<span class="card-date">{formatDate(card.createdAt, 'short')}</span>
+				</span>
 			</div>
-			<div class="card-title">{getTitle(card)}</div>
-			{#if !expanded && getSubtitle(card)}
-				<div class="card-subtitle">{getSubtitle(card)}</div>
+			{#if !expanded}
+				<div class="card-title">{getTitle(card)}</div>
+				{#if getSubtitle(card)}
+					<div class="card-subtitle">{getSubtitle(card)}</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -124,25 +145,10 @@
 		<div class="card-expanded" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
 			<div class="edit-form">
 				{#if card.type === 'URL'}
-					<label class="field">
-						<span class="field-label">Title</span>
-						<input type="text" bind:value={editTitle} class="field-input" />
-					</label>
-					<label class="field">
-						<span class="field-label">URL</span>
-						<input type="url" bind:value={editUrl} class="field-input" />
-					</label>
+					<input type="text" bind:value={editTitle} class="field-input" placeholder="Title" onblur={saveEdit} />
 				{:else if card.type === 'NOTE'}
-					<label class="field">
-						<span class="field-label">Note</span>
-						<textarea bind:value={editText} class="field-textarea" rows="4"></textarea>
-					</label>
+					<textarea bind:value={editText} class="field-textarea" rows="4" placeholder="Note" onblur={saveEdit}></textarea>
 				{/if}
-				<div class="edit-actions">
-					<button class="action-btn primary" onclick={saveEdit}>Save</button>
-					<button class="action-btn" onclick={() => (expanded = false)}>Cancel</button>
-					<button class="action-btn danger" onclick={() => (confirmDelete = true)}>Delete</button>
-				</div>
 			</div>
 
 			<CardCollections cardId={card.cardId} {card} />
@@ -206,8 +212,15 @@
 	.card-item-header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: var(--space-sm);
 		margin-bottom: var(--space-xs);
+	}
+
+	.card-header-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-left: auto;
 	}
 
 	.card-date {
@@ -222,6 +235,29 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.url-domain {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		font-size: 0.75rem;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.url-domain:hover {
+		color: var(--color-primary);
+		text-decoration: underline;
+	}
+
+	.url-arrow {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
 	}
 
 	.card-subtitle {
@@ -275,41 +311,28 @@
 		resize: vertical;
 	}
 
-	.edit-actions {
-		display: flex;
-		gap: var(--space-sm);
+	.delete-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--color-text-secondary);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: color 0.15s, background 0.15s;
 	}
 
-	.action-btn {
-		padding: var(--space-sm) var(--space-md);
-		border-radius: var(--radius-md);
-		font-size: 0.875rem;
-		font-weight: 500;
-		border: 1px solid var(--color-border);
-		transition: background 0.15s;
-	}
-
-	.action-btn:hover {
-		background: var(--color-bg);
-	}
-
-	.action-btn.primary {
-		background: var(--color-primary);
-		color: white;
-		border-color: var(--color-primary);
-	}
-
-	.action-btn.primary:hover {
-		opacity: 0.9;
-	}
-
-	.action-btn.danger {
+	.delete-btn:hover {
 		color: var(--color-danger);
-		border-color: var(--color-danger);
-		margin-left: auto;
+		background: var(--color-danger-light);
 	}
 
-	.action-btn.danger:hover {
-		background: var(--color-danger-light);
+	.delete-btn svg {
+		width: 14px;
+		height: 14px;
 	}
 </style>

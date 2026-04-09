@@ -71,9 +71,8 @@
 
 <style>
 	.section {
-		margin-top: var(--space-lg);
-		padding-top: var(--space-lg);
-		border-top: 1px solid var(--color-border);
+		margin-top: var(--space-sm);
+		padding-top: var(--space-sm);
 	}
 
 	.section-header {
