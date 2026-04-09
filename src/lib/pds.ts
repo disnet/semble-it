@@ -3,6 +3,7 @@ import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { db } from './db';
 import { auth } from './auth.svelte';
 import type { Card, Collection, CollectionCard, Connection } from './types';
+import { isUrl } from './utils';
 
 function isExpiredAuthError(e: unknown): boolean {
 	const status = (e as any)?.status ?? (e as any)?.response?.status;
@@ -285,10 +286,6 @@ export async function deleteCollectionLinkFromPDS(
 }
 
 // --- Connection operations ---
-
-function isUrl(value: string): boolean {
-	return value.startsWith('http://') || value.startsWith('https://');
-}
 
 function connectionToRecord(
 	session: OAuthSession,

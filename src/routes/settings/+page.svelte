@@ -3,6 +3,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { createCardInPDS, createCollectionInPDS, createConnectionInPDS, syncFromPDS, deleteCardFromPDS, deleteCollectionFromPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 
 	let importing = $state(false);
 	let exportStatus = $state('');
@@ -157,17 +158,12 @@
 </div>
 
 {#if confirmClear}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="confirm-overlay" onclick={() => (confirmClear = false)} onkeydown={() => {}}>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="confirm-dialog" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-			<p class="confirm-text">Are you sure? This will permanently delete all cards, collections, connections, and their relationships. This cannot be undone.</p>
-			<div class="confirm-actions">
-				<button class="action-btn" onclick={() => (confirmClear = false)}>Cancel</button>
-				<button class="action-btn danger" onclick={clearAllData}>Clear Everything</button>
-			</div>
-		</div>
-	</div>
+	<ConfirmDialog
+		message="Are you sure? This will permanently delete all cards, collections, connections, and their relationships. This cannot be undone."
+		confirmLabel="Clear Everything"
+		onconfirm={clearAllData}
+		oncancel={() => (confirmClear = false)}
+	/>
 {/if}
 
 <style>
@@ -239,57 +235,4 @@
 		line-height: 1.5;
 	}
 
-	.confirm-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
-		z-index: 300;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-md);
-	}
-
-	.confirm-dialog {
-		background: var(--color-surface);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		max-width: 360px;
-		width: 100%;
-		box-shadow: var(--shadow-lg);
-	}
-
-	.confirm-text {
-		font-size: 0.9375rem;
-		line-height: 1.5;
-		margin-bottom: var(--space-md);
-	}
-
-	.confirm-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
-	}
-
-	.action-btn {
-		padding: var(--space-sm) var(--space-md);
-		border-radius: var(--radius-md);
-		font-size: 0.875rem;
-		font-weight: 500;
-		border: 1px solid var(--color-border);
-		transition: background 0.15s;
-	}
-
-	.action-btn:hover {
-		background: var(--color-bg);
-	}
-
-	.action-btn.danger {
-		color: var(--color-danger);
-		border-color: var(--color-danger);
-	}
-
-	.action-btn.danger:hover {
-		background: var(--color-danger-light);
-	}
 </style>

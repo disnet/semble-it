@@ -6,7 +6,9 @@
 	import { auth } from '$lib/auth.svelte';
 	import { updateConnectionInPDS, deleteConnectionFromPDS } from '$lib/pds';
 	import { CONNECTION_TYPES, type ConnectionType } from '$lib/types';
+	import { isUrl } from '$lib/utils';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 
 	const connectionId = $derived($page.params.connectionId!);
 
@@ -17,10 +19,6 @@
 	let editType = $state<ConnectionType>('RELATED');
 	let editNote = $state('');
 	let confirmDelete = $state(false);
-
-	function isUrl(value: string): boolean {
-		return value.startsWith('http://') || value.startsWith('https://');
-	}
 
 	function getEndpointName(value: string): string {
 		if (isUrl(value)) {
@@ -131,17 +129,11 @@
 	</div>
 
 	{#if confirmDelete}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="confirm-overlay" onclick={() => (confirmDelete = false)} onkeydown={() => {}}>
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="confirm-dialog" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-				<p class="confirm-text">Delete this connection?</p>
-				<div class="confirm-actions">
-					<button class="action-btn" onclick={() => (confirmDelete = false)}>Cancel</button>
-					<button class="action-btn danger" onclick={deleteConnection}>Delete</button>
-				</div>
-			</div>
-		</div>
+		<ConfirmDialog
+			message="Delete this connection?"
+			onconfirm={deleteConnection}
+			oncancel={() => (confirmDelete = false)}
+		/>
 	{/if}
 {:else}
 	<div class="detail-container">
@@ -289,35 +281,4 @@
 		border-color: var(--color-primary);
 	}
 
-	.confirm-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
-		z-index: 300;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-md);
-	}
-
-	.confirm-dialog {
-		background: var(--color-surface);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		max-width: 360px;
-		width: 100%;
-		box-shadow: var(--shadow-lg);
-	}
-
-	.confirm-text {
-		font-size: 0.9375rem;
-		line-height: 1.5;
-		margin-bottom: var(--space-md);
-	}
-
-	.confirm-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
-	}
 </style>

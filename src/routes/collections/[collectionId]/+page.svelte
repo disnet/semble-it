@@ -8,6 +8,7 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
+	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
 	const PAGE_SIZE = 20;
@@ -180,17 +181,11 @@
 	</BottomSheet>
 
 	{#if confirmDelete}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="confirm-overlay" onclick={() => (confirmDelete = false)} onkeydown={() => {}}>
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="confirm-dialog" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
-				<p class="confirm-text">Delete this collection? Cards won't be deleted.</p>
-				<div class="confirm-actions">
-					<button class="action-btn" onclick={() => (confirmDelete = false)}>Cancel</button>
-					<button class="action-btn danger" onclick={deleteCollection}>Delete</button>
-				</div>
-			</div>
-		</div>
+		<ConfirmDialog
+			message="Delete this collection? Cards won't be deleted."
+			onconfirm={deleteCollection}
+			oncancel={() => (confirmDelete = false)}
+		/>
 	{/if}
 {:else}
 	<div class="detail-container">
@@ -328,35 +323,4 @@
 		white-space: nowrap;
 	}
 
-	.confirm-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.4);
-		z-index: 300;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-md);
-	}
-
-	.confirm-dialog {
-		background: var(--color-surface);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		max-width: 360px;
-		width: 100%;
-		box-shadow: var(--shadow-lg);
-	}
-
-	.confirm-text {
-		font-size: 0.9375rem;
-		line-height: 1.5;
-		margin-bottom: var(--space-md);
-	}
-
-	.confirm-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: var(--space-sm);
-	}
 </style>

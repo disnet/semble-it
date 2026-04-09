@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Card } from '$lib/types';
+	import { formatDate } from '$lib/utils';
 	import CardTypeBadge from './CardTypeBadge.svelte';
 
 	let { card }: { card: Card } = $props();
@@ -22,12 +23,6 @@
 		}
 	}
 
-	function formatDate(date: Date): string {
-		return new Date(date).toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric'
-		});
-	}
 </script>
 
 <a href="/cards/{card.cardId}" class="card-item" class:has-image={card.type === 'URL' && card.imageUrl}>
@@ -37,7 +32,7 @@
 	<div class="card-item-body">
 		<div class="card-item-header">
 			<CardTypeBadge type={card.type} />
-			<span class="card-date">{formatDate(card.createdAt)}</span>
+			<span class="card-date">{formatDate(card.createdAt, 'short')}</span>
 		</div>
 		<div class="card-title">{getTitle(card)}</div>
 		{#if getSubtitle(card)}
