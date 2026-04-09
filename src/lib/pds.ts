@@ -2,7 +2,7 @@ import { Agent } from '@atproto/api';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { db } from './db';
 import { auth } from './auth.svelte';
-import type { Card, Collection, CollectionCard, Connection, Follow } from './types';
+import type { Card, Collection, CollectionCard, Connection, Follow, RemoteDataCache } from './types';
 import { isUrl } from './utils';
 
 function isExpiredAuthError(e: unknown): boolean {
@@ -428,7 +428,7 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 
 	await db.transaction(
 		'rw',
-		[db.cards, db.collections, db.collectionCards, db.connections, db.follows],
+		[db.cards, db.collections, db.collectionCards, db.connections, db.follows, db.cacheMetadata],
 		async () => {
 			await db.cards.clear();
 			await db.collections.clear();
@@ -492,6 +492,8 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 					})
 				);
 			}
+
+			await db.cacheMetadata.put({ key: 'pds-sync', fetchedAt: new Date() });
 		}
 	);
 }
@@ -555,6 +557,127 @@ export async function fetchRemoteRecord(
 	if (!res.ok) return null;
 	const data = await res.json();
 	return data.value as Record<string, unknown>;
+}
+
+// --- Cache helpers ---
+
+export async function getCacheTimestamp(key: string): Promise<Date | null> {
+	const entry = await db.cacheMetadata.get(key);
+	return entry?.fetchedAt ?? null;
+}
+
+// --- Remote data caching ---
+
+export type RemoteUserData = {
+	profile: { displayName?: string; handle?: string; avatar?: string } | null;
+	collections: Array<{ uri: string; name: string; description?: string }>;
+};
+
+export async function fetchRemoteUserCached(did: string): Promise<RemoteUserData | null> {
+	const cacheKey = `remote-user:${did}`;
+	const cached = await db.remoteData.where('source').equals(cacheKey).toArray();
+	if (cached.length === 0) return null;
+	return {
+		profile: (cached.find((c) => c.type === 'profile')?.data as RemoteUserData['profile']) ?? null,
+		collections: (cached.find((c) => c.type === 'collections')?.data as RemoteUserData['collections']) ?? []
+	};
+}
+
+export async function fetchRemoteUserFresh(did: string): Promise<RemoteUserData> {
+	const cacheKey = `remote-user:${did}`;
+
+	const [profileRes, collectionRecords] = await Promise.all([
+		fetch(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`)
+			.then((r) => (r.ok ? r.json() : null))
+			.catch(() => null),
+		fetchRemoteRecords(did, 'network.cosmik.collection')
+	]);
+
+	const profile = profileRes
+		? { displayName: profileRes.displayName, handle: profileRes.handle, avatar: profileRes.avatar }
+		: null;
+	const collections = collectionRecords.map((r) => ({
+		uri: r.uri,
+		name: (r.value.name as string) || 'Untitled',
+		description: r.value.description as string | undefined
+	}));
+
+	const now = new Date();
+	await db.transaction('rw', [db.remoteData, db.cacheMetadata], async () => {
+		await db.remoteData.where('source').equals(cacheKey).delete();
+		await db.remoteData.bulkAdd([
+			{ source: cacheKey, type: 'profile', data: profile, fetchedAt: now },
+			{ source: cacheKey, type: 'collections', data: collections, fetchedAt: now }
+		]);
+		await db.cacheMetadata.put({ key: cacheKey, fetchedAt: now });
+	});
+
+	return { profile, collections };
+}
+
+export type RemoteCollectionData = {
+	collectionName: string;
+	collectionDesc?: string;
+	cards: Array<Record<string, unknown>>;
+};
+
+export async function fetchRemoteCollectionCached(subject: string): Promise<RemoteCollectionData | null> {
+	const cacheKey = `remote-collection:${subject}`;
+	const cached = await db.remoteData.where('source').equals(cacheKey).toArray();
+	if (cached.length === 0) return null;
+	return {
+		collectionName: (cached.find((c) => c.type === 'collection-meta')?.data as { name: string; description?: string })?.name ?? 'Collection',
+		collectionDesc: (cached.find((c) => c.type === 'collection-meta')?.data as { name: string; description?: string })?.description,
+		cards: (cached.find((c) => c.type === 'cards')?.data as Array<Record<string, unknown>>) ?? []
+	};
+}
+
+export async function fetchRemoteCollectionFresh(subject: string): Promise<RemoteCollectionData> {
+	const cacheKey = `remote-collection:${subject}`;
+	const parts = subject.replace('at://', '').split('/');
+	const repo = parts[0];
+	const collection = parts.slice(1, -1).join('/');
+	const rkey = parts[parts.length - 1];
+
+	// Fetch collection metadata
+	const colRecord = await fetchRemoteRecord(repo, collection, rkey);
+	const collectionName = (colRecord?.name as string) || 'Collection';
+	const collectionDesc = colRecord?.description as string | undefined;
+
+	// Fetch cards via collectionLink
+	let cards: Array<Record<string, unknown>> = [];
+	if (collection === 'network.cosmik.collection') {
+		const linkRecords = await fetchRemoteRecords(repo, 'network.cosmik.collectionLink');
+		const cardRefs = linkRecords
+			.filter((r) => {
+				const colRef = r.value.collection as Record<string, unknown> | undefined;
+				return colRef && (colRef.uri as string) === subject;
+			})
+			.map((r) => {
+				const cardRef = r.value.card as Record<string, unknown>;
+				return cardRef.uri as string;
+			});
+
+		const cardResults = await Promise.all(
+			cardRefs.map(async (cardUri) => {
+				const p = cardUri.replace('at://', '').split('/');
+				return fetchRemoteRecord(p[0], p.slice(1, -1).join('/'), p[p.length - 1]);
+			})
+		);
+		cards = cardResults.filter((c): c is Record<string, unknown> => c !== null);
+	}
+
+	const now = new Date();
+	await db.transaction('rw', [db.remoteData, db.cacheMetadata], async () => {
+		await db.remoteData.where('source').equals(cacheKey).delete();
+		await db.remoteData.bulkAdd([
+			{ source: cacheKey, type: 'collection-meta', data: { name: collectionName, description: collectionDesc }, fetchedAt: now },
+			{ source: cacheKey, type: 'cards', data: cards, fetchedAt: now }
+		]);
+		await db.cacheMetadata.put({ key: cacheKey, fetchedAt: now });
+	});
+
+	return { collectionName, collectionDesc, cards };
 }
 
 // --- Resolve follow display metadata ---

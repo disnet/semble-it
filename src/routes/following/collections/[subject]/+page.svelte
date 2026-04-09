@@ -1,21 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { fetchRemoteRecords, fetchRemoteRecord } from '$lib/pds';
+	import { fetchRemoteCollectionCached, fetchRemoteCollectionFresh } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import RefreshBar from '$lib/components/shared/RefreshBar.svelte';
 	import RemoteCardItem from '$lib/components/cards/RemoteCardItem.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
 	const subject = $derived(decodeURIComponent($page.params.subject!));
-
-	// Parse AT URI: at://did/collection/rkey
-	const parsed = $derived.by(() => {
-		const parts = subject.replace('at://', '').split('/');
-		return {
-			repo: parts[0],
-			collection: parts.slice(1, -1).join('/'),
-			rkey: parts[parts.length - 1]
-		};
-	});
 
 	const PAGE_SIZE = 20;
 	let visibleCount = $state(PAGE_SIZE);
@@ -26,7 +17,7 @@
 	let loading = $state(true);
 
 	$effect(() => {
-		const { repo, collection, rkey } = parsed;
+		const currentSubject = subject;
 		loading = true;
 		visibleCount = PAGE_SIZE;
 		collectionName = 'Collection';
@@ -34,46 +25,34 @@
 		cards = [];
 
 		(async () => {
-			// Fetch the collection record for its name
-			const colRecord = await fetchRemoteRecord(repo, collection, rkey);
-			if (colRecord) {
-				collectionName = (colRecord.name as string) || 'Collection';
-				collectionDesc = colRecord.description as string | undefined;
+			// Try cache first
+			const cached = await fetchRemoteCollectionCached(currentSubject);
+			if (cached) {
+				collectionName = cached.collectionName;
+				collectionDesc = cached.collectionDesc;
+				cards = cached.cards;
+				loading = false;
+				return;
 			}
-
-			// Only fetch cards for cosmik collections via collectionLink
-			if (collection === 'network.cosmik.collection') {
-				const linkRecords = await fetchRemoteRecords(repo, 'network.cosmik.collectionLink');
-				// Filter links that reference this collection
-				const cardRefs = linkRecords
-					.filter((r) => {
-						const colRef = r.value.collection as Record<string, unknown> | undefined;
-						return colRef && (colRef.uri as string) === subject;
-					})
-					.map((r) => {
-						const cardRef = r.value.card as Record<string, unknown>;
-						return cardRef.uri as string;
-					});
-
-				// Fetch each card record
-				const cardResults = await Promise.all(
-					cardRefs.map(async (cardUri) => {
-						const parts = cardUri.replace('at://', '').split('/');
-						const cardRepo = parts[0];
-						const cardCollection = parts.slice(1, -1).join('/');
-						const cardRkey = parts[parts.length - 1];
-						return fetchRemoteRecord(cardRepo, cardCollection, cardRkey);
-					})
-				);
-				cards = cardResults.filter((c): c is Record<string, unknown> => c !== null);
-			}
-
+			// No cache — fetch fresh
+			const fresh = await fetchRemoteCollectionFresh(currentSubject);
+			collectionName = fresh.collectionName;
+			collectionDesc = fresh.collectionDesc;
+			cards = fresh.cards;
 			loading = false;
 		})();
 	});
+
+	async function handleRefresh() {
+		const fresh = await fetchRemoteCollectionFresh(subject);
+		collectionName = fresh.collectionName;
+		collectionDesc = fresh.collectionDesc;
+		cards = fresh.cards;
+	}
 </script>
 
 <PageHeader title={collectionName} />
+<RefreshBar cacheKey={`remote-collection:${subject}`} onrefresh={handleRefresh} />
 
 <div class="detail-container">
 	{#if loading}

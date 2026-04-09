@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { fetchRemoteRecords } from '$lib/pds';
+	import { fetchRemoteUserCached, fetchRemoteUserFresh } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import RefreshBar from '$lib/components/shared/RefreshBar.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
 	const did = $derived($page.params.did!);
@@ -20,32 +21,34 @@
 		profile = null;
 		collections = [];
 
-		Promise.all([
-			fetch(`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(currentDid)}`)
-				.then((r) => (r.ok ? r.json() : null))
-				.catch(() => null),
-			fetchRemoteRecords(currentDid, 'network.cosmik.collection')
-		]).then(([profileData, collectionRecords]) => {
-			if (profileData) {
-				profile = {
-					displayName: profileData.displayName,
-					handle: profileData.handle,
-					avatar: profileData.avatar
-				};
+		(async () => {
+			// Try cache first
+			const cached = await fetchRemoteUserCached(currentDid);
+			if (cached) {
+				profile = cached.profile;
+				collections = cached.collections;
+				loading = false;
+				return;
 			}
-			collections = collectionRecords.map((r) => ({
-				uri: r.uri,
-				name: (r.value.name as string) || 'Untitled',
-				description: r.value.description as string | undefined
-			}));
+			// No cache — fetch fresh
+			const fresh = await fetchRemoteUserFresh(currentDid);
+			profile = fresh.profile;
+			collections = fresh.collections;
 			loading = false;
-		});
+		})();
 	});
 
 	const displayName = $derived(profile?.displayName || profile?.handle || did);
+
+	async function handleRefresh() {
+		const fresh = await fetchRemoteUserFresh(did);
+		profile = fresh.profile;
+		collections = fresh.collections;
+	}
 </script>
 
 <PageHeader title={displayName} />
+<RefreshBar cacheKey={`remote-user:${did}`} onrefresh={handleRefresh} />
 
 <div class="detail-container">
 	{#if loading}

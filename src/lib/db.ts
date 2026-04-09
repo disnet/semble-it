@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Card, Collection, CollectionCard, Connection, Follow } from './types';
+import type { Card, Collection, CollectionCard, Connection, Follow, CacheMetadata, RemoteDataCache } from './types';
 
 class AssembleDB extends Dexie {
 	cards!: Table<Card>;
@@ -7,6 +7,8 @@ class AssembleDB extends Dexie {
 	collectionCards!: Table<CollectionCard>;
 	connections!: Table<Connection>;
 	follows!: Table<Follow>;
+	cacheMetadata!: Table<CacheMetadata>;
+	remoteData!: Table<RemoteDataCache>;
 
 	constructor() {
 		super('assemble');
@@ -28,6 +30,15 @@ class AssembleDB extends Dexie {
 			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
 			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt, uri',
 			follows: 'followId, subject, subjectType, createdAt, uri'
+		});
+		this.version(4).stores({
+			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt, uri',
+			collections: 'collectionId, name, createdAt, uri',
+			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
+			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt, uri',
+			follows: 'followId, subject, subjectType, createdAt, uri',
+			cacheMetadata: 'key',
+			remoteData: '[source+type], source, type'
 		});
 	}
 }

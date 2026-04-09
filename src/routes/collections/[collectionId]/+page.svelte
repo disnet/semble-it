@@ -4,8 +4,9 @@
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
 	import { auth } from '$lib/auth.svelte';
-	import { updateCollectionInPDS, deleteCollectionFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS } from '$lib/pds';
+	import { updateCollectionInPDS, deleteCollectionFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, syncFromPDS, resolveFollowMetadata } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import RefreshBar from '$lib/components/shared/RefreshBar.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
@@ -143,6 +144,12 @@
 		goto('/cards');
 	}
 
+	async function handleRefresh() {
+		if (!auth.session) return;
+		await syncFromPDS(auth.session);
+		resolveFollowMetadata(auth.session).catch(console.error);
+	}
+
 	async function toggleCard(cardId: string, isMember: boolean) {
 		if (isMember) {
 			const ccLink = (cardLinksData ?? []).find((l) => l.cardId === cardId);
@@ -163,6 +170,7 @@
 </script>
 
 <PageHeader title={collectionData?.name ?? 'Collection'} />
+<RefreshBar cacheKey="pds-sync" onrefresh={handleRefresh} />
 
 {#if collectionData}
 	<div class="detail-container">

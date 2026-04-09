@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
+	import { auth } from '$lib/auth.svelte';
+	import { syncFromPDS, resolveFollowMetadata } from '$lib/pds';
 	import type { CardType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import RefreshBar from '$lib/components/shared/RefreshBar.svelte';
 	import CardFilterBar from '$lib/components/cards/CardFilterBar.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
@@ -48,9 +51,16 @@
 
 	let visibleCards = $derived(filteredCards.slice(0, visibleCount));
 	let hasMore = $derived(visibleCount < filteredCards.length);
+
+	async function handleRefresh() {
+		if (!auth.session) return;
+		await syncFromPDS(auth.session);
+		resolveFollowMetadata(auth.session).catch(console.error);
+	}
 </script>
 
 <PageHeader title="Cards" />
+<RefreshBar cacheKey="pds-sync" onrefresh={handleRefresh} />
 
 <CardFilterBar bind:value={filter} />
 

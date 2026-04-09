@@ -86,3 +86,15 @@ export interface Connection {
 	uri?: string;
 	cid?: string;
 }
+
+export interface CacheMetadata {
+	key: string;
+	fetchedAt: Date;
+}
+
+export interface RemoteDataCache {
+	source: string;
+	type: string;
+	data: unknown;
+	fetchedAt: Date;
+}

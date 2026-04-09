@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata } from '$lib/pds';
+	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata, getCacheTimestamp } from '$lib/pds';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
 
@@ -25,16 +25,20 @@
 
 		await auth.init();
 		if (auth.isLoggedIn && auth.session) {
-			syncing = true;
-			try {
-				await syncFromPDS(auth.session);
-				resolveFollowMetadata(auth.session).catch(console.error);
-			} catch (e) {
-				if (!(await handleExpiredAuth(e))) {
-					console.error('PDS sync failed:', e);
+			// Only auto-sync on first-ever load (no cached data yet)
+			const lastSync = await getCacheTimestamp('pds-sync');
+			if (!lastSync) {
+				syncing = true;
+				try {
+					await syncFromPDS(auth.session);
+					resolveFollowMetadata(auth.session).catch(console.error);
+				} catch (e) {
+					if (!(await handleExpiredAuth(e))) {
+						console.error('PDS sync failed:', e);
+					}
+				} finally {
+					syncing = false;
 				}
-			} finally {
-				syncing = false;
 			}
 		}
 		if (!auth.isLoggedIn && !isLoginPage) {
