@@ -306,11 +306,10 @@
 			{:else}
 				<div class="connection-list">
 					{#each $cardConnections?.asSource ?? [] as conn}
-						<div class="connection-row">
-							<a href="/connections/{conn.connectionId}" class="connection-item">
-								<span class="conn-type">{conn.type}</span>
-								<span class="conn-arrow">→</span>
-								<span class="conn-card">{getEndpointName(conn.targetCardId)}</span>
+						<div class="connection-chip">
+							<a href="/connections/{conn.connectionId}" class="connection-chip-link">
+								<span class="conn-type-badge">{conn.type.replace('_', ' ')}</span>
+								<span class="conn-card-name">{getEndpointName(conn.targetCardId)}</span>
 							</a>
 							{#if confirmDeleteConn === conn.connectionId}
 								<span class="conn-confirm">
@@ -318,16 +317,15 @@
 									<button class="conn-confirm-btn" onclick={() => (confirmDeleteConn = null)}>Cancel</button>
 								</span>
 							{:else}
-								<button class="conn-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
+								<button class="conn-chip-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
 							{/if}
 						</div>
 					{/each}
 					{#each $cardConnections?.asTarget ?? [] as conn}
-						<div class="connection-row">
-							<a href="/connections/{conn.connectionId}" class="connection-item">
-								<span class="conn-card">{getEndpointName(conn.sourceCardId)}</span>
-								<span class="conn-arrow">→</span>
-								<span class="conn-type">{conn.type}</span>
+						<div class="connection-chip">
+							<a href="/connections/{conn.connectionId}" class="connection-chip-link">
+								<span class="conn-type-badge">{conn.type.replace('_', ' ')}</span>
+								<span class="conn-card-name">{getEndpointName(conn.sourceCardId)}</span>
 							</a>
 							{#if confirmDeleteConn === conn.connectionId}
 								<span class="conn-confirm">
@@ -335,7 +333,7 @@
 									<button class="conn-confirm-btn" onclick={() => (confirmDeleteConn = null)}>Cancel</button>
 								</span>
 							{:else}
-								<button class="conn-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
+								<button class="conn-chip-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
 							{/if}
 						</div>
 					{/each}
@@ -517,48 +515,63 @@
 
 	.connection-list {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
+		flex-wrap: wrap;
+		gap: var(--space-sm);
 	}
 
-	.connection-row {
+	.connection-chip {
 		display: flex;
 		align-items: center;
-		gap: var(--space-xs);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		transition: border-color 0.15s;
 	}
 
-	.connection-item {
+	.connection-chip:hover {
+		border-color: var(--color-primary);
+	}
+
+	.connection-chip-link {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		padding: var(--space-sm);
-		border-radius: var(--radius-md);
-		font-size: 0.8125rem;
+		padding: var(--space-xs) var(--space-sm);
 		text-decoration: none;
 		color: var(--color-text);
-		transition: background 0.15s;
-		flex: 1;
+		font-size: 0.8125rem;
 		min-width: 0;
 	}
 
-	.connection-item:hover {
-		background: var(--color-bg);
+	.conn-type-badge {
+		font-weight: 600;
+		color: var(--color-primary);
+		font-size: 0.6875rem;
+		text-transform: uppercase;
+		flex-shrink: 0;
 	}
 
-	.conn-delete {
+	.conn-card-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 200px;
+	}
+
+	.conn-chip-delete {
 		flex-shrink: 0;
-		width: 24px;
-		height: 24px;
+		width: 28px;
+		height: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: var(--radius-full);
-		font-size: 1rem;
+		font-size: 0.875rem;
 		color: var(--color-text-secondary);
+		border-left: 1px solid var(--color-border);
 		transition: background 0.15s, color 0.15s;
 	}
 
-	.conn-delete:hover {
+	.conn-chip-delete:hover {
 		background: var(--color-danger-light);
 		color: var(--color-danger);
 	}
@@ -567,6 +580,7 @@
 		display: flex;
 		gap: var(--space-xs);
 		flex-shrink: 0;
+		padding: 0 var(--space-xs);
 	}
 
 	.conn-confirm-btn {
@@ -584,23 +598,6 @@
 
 	.conn-confirm-btn.danger:hover {
 		background: var(--color-danger-light);
-	}
-
-	.conn-type {
-		font-weight: 600;
-		color: var(--color-primary);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-	}
-
-	.conn-arrow {
-		color: var(--color-text-secondary);
-	}
-
-	.conn-card {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.collection-picker-wrap {
