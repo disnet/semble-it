@@ -10,7 +10,7 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardTypeBadge from '$lib/components/cards/CardTypeBadge.svelte';
 	import CardPicker from '$lib/components/cards/CardPicker.svelte';
-	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
+	import CollectionPicker from '$lib/components/collections/CollectionPicker.svelte';
 
 	const cardId = $derived($page.params.cardId!);
 
@@ -33,8 +33,8 @@
 	// For resolving card names in connections
 	const allCards = liveQuery(() => db.cards.toArray());
 
-	let showCollections = $state(false);
 	let editing = $state(false);
+	let addToCollection = $state<string | undefined>(undefined);
 	let confirmDelete = $state(false);
 
 	// Inline connection form
@@ -49,6 +49,18 @@
 		await db.connections.delete(connId);
 		confirmDeleteConn = null;
 	}
+
+	// Collections this card already belongs to
+	let memberCollectionIds = $derived(
+		($cardCollections ?? []).map((cc) => cc.collectionId)
+	);
+
+	$effect(() => {
+		if (!addToCollection) return;
+		const colId = addToCollection;
+		addToCollection = undefined;
+		toggleCollection(colId, false);
+	});
 
 	// Cards already connected with the selected type (as source)
 	let connectedWithType = $derived.by(() => {
@@ -253,7 +265,9 @@
 		<section class="section">
 			<div class="section-header">
 				<h4 class="section-title">Collections</h4>
-				<button class="section-action" onclick={() => (showCollections = true)}>Manage</button>
+			</div>
+			<div class="collection-picker-wrap">
+				<CollectionPicker bind:selected={addToCollection} excludeIds={memberCollectionIds} />
 			</div>
 			{#if ($cardCollections ?? []).length === 0}
 				<p class="section-empty">Not in any collections</p>
@@ -262,7 +276,10 @@
 					{#each $cardCollections ?? [] as cc}
 						{@const col = ($collections ?? []).find((c) => c.collectionId === cc.collectionId)}
 						{#if col}
-							<a href="/collections/{col.collectionId}" class="tag">{col.name}</a>
+							<span class="tag-with-remove">
+								<a href="/collections/{col.collectionId}" class="tag">{col.name}</a>
+								<button class="tag-remove" onclick={() => toggleCollection(col.collectionId, true)} title="Remove from collection">&times;</button>
+							</span>
 						{/if}
 					{/each}
 				</div>
@@ -326,27 +343,6 @@
 			{/if}
 		</section>
 	</div>
-
-	<!-- Collection manager bottom sheet -->
-	<BottomSheet bind:open={showCollections} title="Manage Collections">
-		{#if ($collections ?? []).length === 0}
-			<p class="section-empty">No collections yet. <a href="/collections/new">Create one</a></p>
-		{:else}
-			<div class="collection-checks">
-				{#each $collections ?? [] as col}
-					{@const isMember = ($cardCollections ?? []).some((cc) => cc.collectionId === col.collectionId)}
-					<label class="check-item">
-						<input
-							type="checkbox"
-							checked={isMember}
-							onchange={() => toggleCollection(col.collectionId, isMember)}
-						/>
-						<span>{col.name}</span>
-					</label>
-				{/each}
-			</div>
-		{/if}
-	</BottomSheet>
 
 	<!-- Delete confirmation -->
 	{#if confirmDelete}
@@ -607,24 +603,40 @@
 		white-space: nowrap;
 	}
 
-	.collection-checks {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
+	.collection-picker-wrap {
+		margin-bottom: var(--space-sm);
 	}
 
-	.check-item {
+	.tag-with-remove {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		background: var(--color-primary-light);
+		border-radius: var(--radius-full);
+		padding-right: 4px;
+	}
+
+	.tag-with-remove .tag {
+		background: none;
+		padding-right: 2px;
+	}
+
+	.tag-remove {
 		display: flex;
 		align-items: center;
-		gap: var(--space-sm);
-		font-size: 0.9375rem;
+		justify-content: center;
+		width: 18px;
+		height: 18px;
+		border-radius: var(--radius-full);
+		font-size: 0.75rem;
+		color: var(--color-primary);
+		transition: background 0.15s, color 0.15s;
 		cursor: pointer;
 	}
 
-	.check-item input[type='checkbox'] {
-		width: 20px;
-		height: 20px;
-		accent-color: var(--color-primary);
+	.tag-remove:hover {
+		background: rgba(0, 0, 0, 0.1);
+		color: var(--color-danger);
 	}
 
 	.edit-form {
