@@ -6,7 +6,7 @@
 	import { auth } from '$lib/auth.svelte';
 	import { syncFromPDS, handleExpiredAuth } from '$lib/pds';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
-	import FAB from '$lib/components/layout/FAB.svelte';
+
 
 	let { children } = $props();
 
@@ -67,7 +67,6 @@
 		{@render children()}
 	</main>
 
-	<FAB />
 {/if}
 
 <style>

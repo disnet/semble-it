@@ -52,7 +52,7 @@
 <style>
 	.connection-container {
 		padding: var(--space-md);
-		padding-bottom: calc(var(--fab-size) + var(--space-xl) * 2);
+		padding-bottom: var(--space-md);
 	}
 
 	.empty-state {

@@ -82,7 +82,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		padding: 0 var(--space-md) calc(var(--fab-size) + var(--space-xl) * 2);
+		padding: 0 var(--space-md) var(--space-md);
 	}
 
 	.empty-state {

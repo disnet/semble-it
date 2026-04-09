@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Menu } from 'lucide-svelte';
+	import { goto } from '$app/navigation';
+	import { Menu, Plus } from 'lucide-svelte';
 	import { sidebarState } from '$lib/sidebar-state.svelte';
 	import type { Snippet } from 'svelte';
 
@@ -16,6 +17,9 @@
 			{@render actions()}
 		</div>
 	{/if}
+	<button class="add-btn" onclick={() => goto('/cards/new')} aria-label="Add card">
+		<Plus size={22} />
+	</button>
 </header>
 
 <style>
@@ -59,5 +63,21 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-xs);
+	}
+
+	.add-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-md);
+		background: var(--color-primary);
+		color: white;
+		transition: background 0.15s;
+	}
+
+	.add-btn:hover {
+		background: var(--color-primary-hover);
 	}
 </style>

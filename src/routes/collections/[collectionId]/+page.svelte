@@ -235,7 +235,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		padding-bottom: calc(var(--fab-size) + var(--space-xl) * 2);
+		padding-bottom: var(--space-md);
 	}
 
 	.edit-form {
