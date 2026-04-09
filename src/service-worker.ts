@@ -16,7 +16,7 @@ self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches
 			.open(CACHE)
-			.then((cache) => cache.addAll(build))
+			.then((cache) => cache.addAll([...build, ...files]))
 			.then(() => self.skipWaiting())
 	);
 });

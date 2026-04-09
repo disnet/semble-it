@@ -3,8 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
-	import { auth } from '$lib/auth.svelte';
-	import { updateConnectionInPDS, deleteConnectionFromPDS } from '$lib/pds';
+	import { queueUpdateConnection, queueDeleteConnection } from '$lib/writeQueue';
 	import { CONNECTION_TYPES, type ConnectionType } from '$lib/types';
 	import { isUrl } from '$lib/utils';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
@@ -55,14 +54,12 @@
 			note: editNote.trim() || undefined,
 			updatedAt: new Date()
 		};
-		if (auth.session) await updateConnectionInPDS(auth.session, updated);
-		await db.connections.put(updated);
+		await queueUpdateConnection(updated);
 		editing = false;
 	}
 
 	async function deleteConnection() {
-		if (auth.session && $connection) await deleteConnectionFromPDS(auth.session, $connection);
-		await db.connections.delete(connectionId);
+		if ($connection) await queueDeleteConnection($connection);
 		goto('/connections');
 	}
 </script>

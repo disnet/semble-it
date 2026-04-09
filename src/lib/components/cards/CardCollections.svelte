@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
-	import { auth } from '$lib/auth.svelte';
-	import { createCollectionLinkInPDS, deleteCollectionLinkFromPDS } from '$lib/pds';
+	import { queueCreateCollectionLink, queueDeleteCollectionLink } from '$lib/writeQueue';
 	import type { Card } from '$lib/types';
 	import CollectionPicker from '$lib/components/collections/CollectionPicker.svelte';
 
@@ -30,17 +29,9 @@
 	async function toggleCollection(colId: string, isMember: boolean) {
 		if (isMember) {
 			const ccLink = ($cardCollections ?? []).find((cc) => cc.collectionId === colId);
-			if (auth.session && ccLink) await deleteCollectionLinkFromPDS(auth.session, ccLink);
-			await db.collectionCards.where('[collectionId+cardId]').equals([colId, cardId]).delete();
+			if (ccLink) await queueDeleteCollectionLink(ccLink);
 		} else {
-			const col = ($collections ?? []).find((col) => col.collectionId === colId);
-			const cc = { collectionId: colId, cardId, addedAt: new Date() } as import('$lib/types').CollectionCard;
-			if (auth.session && card && col) {
-				const ref = await createCollectionLinkInPDS(auth.session, card, col);
-				cc.uri = ref.uri;
-				cc.cid = ref.cid;
-			}
-			await db.collectionCards.add(cc);
+			await queueCreateCollectionLink(cardId, colId);
 		}
 	}
 </script>

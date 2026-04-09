@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
-	import { auth } from '$lib/auth.svelte';
-	import { createConnectionInPDS, deleteConnectionFromPDS } from '$lib/pds';
+	import { queueCreateConnection, queueDeleteConnection } from '$lib/writeQueue';
 	import { CONNECTION_TYPES, type ConnectionType, type Connection } from '$lib/types';
 	import { isUrl } from '$lib/utils';
 	import CardPicker from '$lib/components/cards/CardPicker.svelte';
@@ -50,13 +49,7 @@
 				createdAt: now,
 				updatedAt: now
 			};
-			if (auth.session) {
-				const ref = await createConnectionInPDS(auth.session, connection);
-				connection.uri = ref.uri;
-				connection.cid = ref.cid;
-				connection.connectionId = ref.uri.split('/').pop()!;
-			}
-			await db.connections.add(connection);
+			await queueCreateConnection(connection);
 		} finally {
 			creatingConn = false;
 		}
@@ -64,8 +57,7 @@
 
 	async function deleteConnection(connId: string) {
 		const conn = await db.connections.get(connId);
-		if (auth.session && conn) await deleteConnectionFromPDS(auth.session, conn);
-		await db.connections.delete(connId);
+		if (conn) await queueDeleteConnection(conn);
 		confirmDeleteConn = null;
 	}
 

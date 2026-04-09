@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { db } from '$lib/db';
-	import { auth } from '$lib/auth.svelte';
-	import {
-		updateCardInPDS,
-		deleteCardFromPDS,
-		deleteCollectionLinkFromPDS,
-		deleteConnectionFromPDS
-	} from '$lib/pds';
+	import { queueUpdateCard, queueDeleteCard } from '$lib/writeQueue';
 	import type { Card } from '$lib/types';
 	import { formatDate } from '$lib/utils';
 	import CardTypeBadge from './CardTypeBadge.svelte';
@@ -80,30 +73,11 @@
 			updated = { ...card, text: editText.trim(), updatedAt: now };
 		}
 
-		if (auth.session) await updateCardInPDS(auth.session, updated);
-		await db.cards.put(updated);
+		await queueUpdateCard(updated);
 	}
 
 	async function deleteCard() {
-		if (auth.session) {
-			const [ccLinks, srcConns, tgtConns] = await Promise.all([
-				db.collectionCards.where('cardId').equals(card.cardId).toArray(),
-				db.connections.where('sourceCardId').equals(card.cardId).toArray(),
-				db.connections.where('targetCardId').equals(card.cardId).toArray()
-			]);
-			await Promise.all([
-				deleteCardFromPDS(auth.session, card),
-				...ccLinks.map((cc) => deleteCollectionLinkFromPDS(auth.session!, cc)),
-				...srcConns.map((conn) => deleteConnectionFromPDS(auth.session!, conn)),
-				...tgtConns.map((conn) => deleteConnectionFromPDS(auth.session!, conn))
-			]);
-		}
-		await db.transaction('rw', [db.cards, db.collectionCards, db.connections], async () => {
-			await db.cards.delete(card.cardId);
-			await db.collectionCards.where('cardId').equals(card.cardId).delete();
-			await db.connections.where('sourceCardId').equals(card.cardId).delete();
-			await db.connections.where('targetCardId').equals(card.cardId).delete();
-		});
+		await queueDeleteCard(card);
 	}
 </script>
 

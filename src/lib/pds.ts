@@ -24,8 +24,8 @@ export async function handleExpiredAuth(e: unknown): Promise<boolean> {
 	return false;
 }
 
-const BASE_NSID = 'network.cosmik';
-const NSID = {
+export const BASE_NSID = 'network.cosmik';
+export const NSID = {
 	card: `${BASE_NSID}.card`,
 	collection: `${BASE_NSID}.collection`,
 	collectionLink: `${BASE_NSID}.collectionLink`,
@@ -33,7 +33,7 @@ const NSID = {
 	follow: `${BASE_NSID}.follow`
 } as const;
 
-function createAgent(session: OAuthSession): Agent {
+export function createAgent(session: OAuthSession): Agent {
 	// Wrap the session's fetchHandler to detect expired auth and trigger logout
 	const wrappedSession = Object.create(session, {
 		fetchHandler: {
@@ -52,11 +52,11 @@ function createAgent(session: OAuthSession): Agent {
 	return new Agent(wrappedSession);
 }
 
-function rkeyFromUri(uri: string): string {
+export function rkeyFromUri(uri: string): string {
 	return uri.split('/').pop()!;
 }
 
-function cardAtUri(did: string, rkey: string): string {
+export function cardAtUri(did: string, rkey: string): string {
 	return `at://${did}/${NSID.card}/${rkey}`;
 }
 
@@ -66,7 +66,7 @@ function collectionAtUri(did: string, rkey: string): string {
 
 // --- Card: local → PDS record ---
 
-function cardToRecord(card: Card, parentRef?: { uri: string; cid: string }): Record<string, unknown> {
+export function cardToRecord(card: Card, parentRef?: { uri: string; cid: string }): Record<string, unknown> {
 	const record: Record<string, unknown> = {
 		$type: NSID.card,
 		type: card.type,
@@ -173,7 +173,7 @@ export async function deleteCardFromPDS(session: OAuthSession, card: Card): Prom
 
 // --- Collection operations ---
 
-function collectionToRecord(collection: Collection): Record<string, unknown> {
+export function collectionToRecord(collection: Collection): Record<string, unknown> {
 	return {
 		$type: NSID.collection,
 		name: collection.name,
@@ -288,7 +288,7 @@ export async function deleteCollectionLinkFromPDS(
 
 // --- Connection operations ---
 
-function connectionToRecord(
+export function connectionToRecord(
 	session: OAuthSession,
 	connection: Connection
 ): Record<string, unknown> {
@@ -414,6 +414,30 @@ async function listAllRecords(
 }
 
 export async function syncFromPDS(session: OAuthSession): Promise<void> {
+	// Guard: don't destructive-sync when there are pending offline writes
+	const pendingCount = await db.writeQueue
+		.where('status')
+		.anyOf(['pending', 'processing', 'failed'])
+		.count();
+	if (pendingCount > 0) {
+		if (navigator.onLine) {
+			// Try to flush first — import dynamically to avoid circular deps
+			const { flushQueue } = await import('./writeQueue');
+			await flushQueue(session);
+			const remaining = await db.writeQueue
+				.where('status')
+				.anyOf(['pending', 'failed'])
+				.count();
+			if (remaining > 0) {
+				console.warn('Skipping destructive sync: pending queue entries remain');
+				return;
+			}
+		} else {
+			// Offline with pending writes — skip sync entirely
+			return;
+		}
+	}
+
 	const agent = createAgent(session);
 	const repo = session.did;
 

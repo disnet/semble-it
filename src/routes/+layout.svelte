@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata } from '$lib/pds';
+	import { flushQueue } from '$lib/writeQueue';
 	import { openDb } from '$lib/db';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
@@ -25,15 +26,26 @@
 		await auth.init();
 		if (auth.isLoggedIn && auth.session) {
 			openDb(auth.session.did);
-			// Background sync on every load — UI renders from cache immediately
+			// Flush any pending writes from previous sessions, then sync
 			const session = auth.session;
-			syncFromPDS(session)
+			flushQueue(session)
+				.then(() => syncFromPDS(session))
 				.then(() => resolveFollowMetadata(session))
 				.catch(async (e) => {
 					if (!(await handleExpiredAuth(e))) {
 						console.error('PDS sync failed:', e);
 					}
 				});
+
+			// When connectivity returns, flush pending writes then sync
+			window.addEventListener('online', () => {
+				if (auth.session) {
+					flushQueue(auth.session)
+						.then(() => syncFromPDS(auth.session!))
+						.then(() => resolveFollowMetadata(auth.session!))
+						.catch(console.error);
+				}
+			});
 		}
 		if (!auth.isLoggedIn && !isLoginPage) {
 			goto('/login', { replaceState: true });

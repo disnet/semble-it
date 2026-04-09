@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { db } from '$lib/db';
-	import { auth } from '$lib/auth.svelte';
-	import { createCardInPDS } from '$lib/pds';
+	import { queueCreateCard } from '$lib/writeQueue';
 	import type { Card } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 
@@ -31,13 +29,7 @@
 				updatedAt: now
 			};
 
-			if (auth.session) {
-				const ref = await createCardInPDS(auth.session, urlCard);
-				urlCard.uri = ref.uri;
-				urlCard.cid = ref.cid;
-				urlCard.cardId = ref.uri.split('/').pop()!;
-			}
-			await db.cards.add(urlCard);
+			await queueCreateCard(urlCard);
 
 			// Optionally create a note card as child
 			if (noteText.trim()) {
@@ -50,16 +42,9 @@
 					updatedAt: now
 				};
 
-				if (auth.session && urlCard.uri && urlCard.cid) {
-					const ref = await createCardInPDS(auth.session, noteCard, {
-						uri: urlCard.uri,
-						cid: urlCard.cid
-					});
-					noteCard.uri = ref.uri;
-					noteCard.cid = ref.cid;
-					noteCard.cardId = ref.uri.split('/').pop()!;
-				}
-				await db.cards.add(noteCard);
+				// Parent ref will be available at flush time if card was synced,
+				// but for offline we enqueue without it — PDS will still accept the record
+				await queueCreateCard(noteCard);
 			}
 
 			goto('/cards');
