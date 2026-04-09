@@ -2,7 +2,7 @@ import { Agent } from '@atproto/api';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { db } from './db';
 import { auth } from './auth.svelte';
-import type { Card, Collection, CollectionCard, Connection } from './types';
+import type { Card, Collection, CollectionCard, Connection, Follow } from './types';
 import { isUrl } from './utils';
 
 function isExpiredAuthError(e: unknown): boolean {
@@ -29,7 +29,8 @@ const NSID = {
 	card: `${BASE_NSID}.card`,
 	collection: `${BASE_NSID}.collection`,
 	collectionLink: `${BASE_NSID}.collectionLink`,
-	connection: `${BASE_NSID}.connection`
+	connection: `${BASE_NSID}.connection`,
+	follow: `${BASE_NSID}.follow`
 } as const;
 
 function createAgent(session: OAuthSession): Agent {
@@ -372,6 +373,20 @@ export async function deleteConnectionFromPDS(
 	});
 }
 
+// --- Follow: PDS record → local ---
+
+function recordToFollow(uri: string, cid: string, value: Record<string, unknown>): Follow {
+	const subject = value.subject as string;
+	return {
+		followId: rkeyFromUri(uri),
+		subject,
+		subjectType: subject.startsWith('did:') ? 'user' : 'collection',
+		createdAt: new Date(value.createdAt as string),
+		uri,
+		cid
+	};
+}
+
 // --- Sync: pull all records from PDS into local DB ---
 
 async function listAllRecords(
@@ -402,22 +417,24 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 	const agent = createAgent(session);
 	const repo = session.did;
 
-	const [cardRecords, collectionRecords, collectionLinkRecords, connectionRecords] =
+	const [cardRecords, collectionRecords, collectionLinkRecords, connectionRecords, followRecords] =
 		await Promise.all([
 			listAllRecords(agent, repo, NSID.card),
 			listAllRecords(agent, repo, NSID.collection),
 			listAllRecords(agent, repo, NSID.collectionLink),
-			listAllRecords(agent, repo, NSID.connection)
+			listAllRecords(agent, repo, NSID.connection),
+			listAllRecords(agent, repo, NSID.follow)
 		]);
 
 	await db.transaction(
 		'rw',
-		[db.cards, db.collections, db.collectionCards, db.connections],
+		[db.cards, db.collections, db.collectionCards, db.connections, db.follows],
 		async () => {
 			await db.cards.clear();
 			await db.collections.clear();
 			await db.collectionCards.clear();
 			await db.connections.clear();
+			await db.follows.clear();
 
 			if (cardRecords.length > 0) {
 				await db.cards.bulkAdd(
@@ -453,6 +470,98 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 					connectionRecords.map((r) => recordToConnection(r.uri, r.cid, r.value))
 				);
 			}
+
+			if (followRecords.length > 0) {
+				// Preserve cached display metadata from previous sync
+				const existingFollows = await db.follows.toArray();
+				const metadataCache = new Map(
+					existingFollows
+						.filter((f) => f.displayName)
+						.map((f) => [f.followId, { displayName: f.displayName, avatarUrl: f.avatarUrl }])
+				);
+				await db.follows.clear();
+				await db.follows.bulkAdd(
+					followRecords.map((r) => {
+						const follow = recordToFollow(r.uri, r.cid, r.value);
+						const cached = metadataCache.get(follow.followId);
+						if (cached) {
+							follow.displayName = cached.displayName;
+							follow.avatarUrl = cached.avatarUrl;
+						}
+						return follow;
+					})
+				);
+			}
 		}
 	);
+}
+
+// --- Resolve PDS endpoint for a DID ---
+
+async function resolvePdsEndpoint(did: string): Promise<string | null> {
+	try {
+		const res = await fetch(`https://plc.directory/${encodeURIComponent(did)}`);
+		if (!res.ok) return null;
+		const doc = await res.json();
+		const services = doc.service as Array<{ id: string; type: string; serviceEndpoint: string }> | undefined;
+		const pds = services?.find((s) => s.id === '#atproto_pds');
+		return pds?.serviceEndpoint ?? null;
+	} catch {
+		return null;
+	}
+}
+
+// --- Resolve follow display metadata ---
+
+export async function resolveFollowMetadata(session: OAuthSession): Promise<void> {
+	const follows = await db.follows.filter((f) => !f.displayName).toArray();
+	if (follows.length === 0) return;
+
+	// Cache PDS endpoints by DID to avoid redundant lookups
+	const pdsCache = new Map<string, string | null>();
+
+	async function getPds(did: string): Promise<string | null> {
+		if (!pdsCache.has(did)) {
+			pdsCache.set(did, await resolvePdsEndpoint(did));
+		}
+		return pdsCache.get(did)!;
+	}
+
+	const resolved = await Promise.all(
+		follows.map(async (follow) => {
+			try {
+				if (follow.subjectType === 'user') {
+					const res = await fetch(
+						`https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(follow.subject)}`
+					);
+					if (res.ok) {
+						const profile = await res.json();
+						follow.displayName = profile.displayName || profile.handle;
+						follow.avatarUrl = profile.avatar ?? undefined;
+					}
+				} else {
+					// Collection follow — subject is an AT URI like at://did/network.cosmik.collection/rkey
+					const parts = follow.subject.replace('at://', '').split('/');
+					const repo = parts[0];
+					const collection = parts.slice(1, -1).join('/');
+					const rkey = parts[parts.length - 1];
+					const pdsEndpoint = await getPds(repo);
+					if (pdsEndpoint) {
+						const url = `${pdsEndpoint}/xrpc/com.atproto.repo.getRecord?repo=${encodeURIComponent(repo)}&collection=${encodeURIComponent(collection)}&rkey=${encodeURIComponent(rkey)}`;
+						const res = await fetch(url);
+						if (res.ok) {
+							const data = await res.json();
+							const value = data.value as Record<string, unknown>;
+							follow.displayName = (value.name as string) || undefined;
+						}
+					}
+				}
+			} catch (e) {
+				console.error('Failed to resolve follow metadata for', follow.subject, e);
+			}
+			return follow;
+		})
+	);
+
+	await db.follows.bulkPut(resolved);
 }

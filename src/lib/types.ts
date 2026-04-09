@@ -60,6 +60,20 @@ export const CONNECTION_TYPES = [
 
 export type ConnectionType = (typeof CONNECTION_TYPES)[number];
 
+export type FollowTargetType = 'user' | 'collection';
+
+export interface Follow {
+	followId: string;
+	subject: string; // DID (user) or AT URI (collection)
+	subjectType: FollowTargetType;
+	createdAt: Date;
+	uri?: string;
+	cid?: string;
+	// Cached display metadata (resolved after sync)
+	displayName?: string;
+	avatarUrl?: string;
+}
+
 export interface Connection {
 	connectionId: string;
 	sourceCardId: string;

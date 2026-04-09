@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { syncFromPDS, handleExpiredAuth } from '$lib/pds';
+	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata } from '$lib/pds';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
 
@@ -28,6 +28,7 @@
 			syncing = true;
 			try {
 				await syncFromPDS(auth.session);
+				resolveFollowMetadata(auth.session).catch(console.error);
 			} catch (e) {
 				if (!(await handleExpiredAuth(e))) {
 					console.error('PDS sync failed:', e);

@@ -3,7 +3,7 @@
 	"client_name": "Assemble",
 	"client_uri": "https://assemble.example.com",
 	"redirect_uris": ["https://assemble.example.com/"],
-	"scope": "atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection",
+	"scope": "atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection repo:network.cosmik.follow",
 	"grant_types": ["authorization_code", "refresh_token"],
 	"response_types": ["code"],
 	"token_endpoint_auth_method": "none",

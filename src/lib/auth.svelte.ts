@@ -19,7 +19,7 @@ async function getClient(): Promise<BrowserOAuthClient> {
 		const host = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
 		const redirectUri = `http://${host}:${window.location.port}/`;
 		const clientMetadata = buildAtprotoLoopbackClientMetadata({
-			scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection',
+			scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection repo:network.cosmik.follow',
 			redirect_uris: [redirectUri]
 		});
 
@@ -93,7 +93,7 @@ export const auth = {
 			const c = await getClient();
 			await c.signIn(handle, {
 				state: 'login',
-				scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection'
+				scope: 'atproto repo:network.cosmik.card repo:network.cosmik.collection repo:network.cosmik.collectionLink repo:network.cosmik.connection repo:network.cosmik.follow'
 			});
 			// signIn redirects — this line is not reached
 		} catch (e: any) {

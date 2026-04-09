@@ -7,7 +7,6 @@
 	import { updateCollectionInPDS, deleteCollectionFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS } from '$lib/pds';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
-	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
@@ -23,7 +22,8 @@
 	$effect(() => {
 		const id = collectionId;
 		visibleCount = PAGE_SIZE;
-		showAddCards = false;
+		addSearch = '';
+		addSearchFocused = false;
 		editing = false;
 		confirmDelete = false;
 
@@ -45,11 +45,64 @@
 	let memberCards = $derived.by(() => {
 		const links = cardLinksData;
 		const cards = $allCards ?? [];
-		const memberIds = new Set(links.map((l) => l.cardId));
-		return cards.filter((c) => memberIds.has(c.cardId));
+		const addedAtMap = new Map(links.map((l) => [l.cardId, new Date(l.addedAt).getTime()]));
+		return cards
+			.filter((c) => addedAtMap.has(c.cardId))
+			.sort((a, b) => (addedAtMap.get(b.cardId)! - addedAtMap.get(a.cardId)!));
 	});
 
-	let showAddCards = $state(false);
+	let addSearch = $state('');
+	let addSearchFocused = $state(false);
+	let addSearchEl: HTMLInputElement | undefined = $state(undefined);
+	let addContainerEl: HTMLDivElement | undefined = $state(undefined);
+
+	const MAX_SUGGESTIONS = 10;
+
+	let addSuggestions = $derived.by(() => {
+		const cards = $allCards ?? [];
+		const memberIds = new Set((cardLinksData ?? []).map((l) => l.cardId));
+		const q = addSearch.trim().toLowerCase();
+
+		let results: Array<{ card: import('$lib/types').Card; isMember: boolean }>;
+
+		if (q) {
+			results = cards
+				.filter((c) => {
+					const text = c.type === 'URL' ? `${c.title ?? ''} ${c.url}` : c.text;
+					return text.toLowerCase().includes(q);
+				})
+				.map((c) => ({ card: c, isMember: memberIds.has(c.cardId) }));
+		} else {
+			// No search query — show most recently created cards
+			results = [...cards]
+				.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+				.map((c) => ({ card: c, isMember: memberIds.has(c.cardId) }));
+		}
+
+		// Sort: non-members first, then members (greyed out)
+		results.sort((a, b) => (a.isMember === b.isMember ? 0 : a.isMember ? 1 : -1));
+		return results.slice(0, MAX_SUGGESTIONS);
+	});
+
+	function handleAddCardClick(cardId: string, isMember: boolean) {
+		if (isMember) return;
+		toggleCard(cardId, false);
+		addSearch = '';
+		addSearchFocused = false;
+		addSearchEl?.blur();
+	}
+
+	function handleAddSearchClickOutside(e: MouseEvent) {
+		if (addContainerEl && !addContainerEl.contains(e.target as Node)) {
+			addSearchFocused = false;
+		}
+	}
+
+	$effect(() => {
+		document.addEventListener('mousedown', handleAddSearchClickOutside);
+		return () => document.removeEventListener('mousedown', handleAddSearchClickOutside);
+	});
+
 	let editing = $state(false);
 	let editName = $state('');
 	let editDescription = $state('');
@@ -120,8 +173,40 @@
 
 			<div class="actions">
 				<button class="action-btn" onclick={startEdit}>Edit</button>
-				<button class="action-btn" onclick={() => (showAddCards = true)}>Add Cards</button>
 				<button class="action-btn danger" onclick={() => (confirmDelete = true)}>Delete</button>
+			</div>
+
+			<div class="add-card-search" bind:this={addContainerEl}>
+				<input
+					type="search"
+					placeholder="Add to collection..."
+					bind:value={addSearch}
+					bind:this={addSearchEl}
+					onfocus={() => (addSearchFocused = true)}
+					class="add-card-input"
+				/>
+				{#if addSearchFocused}
+					<div class="add-card-dropdown">
+						{#each addSuggestions as { card, isMember } (card.cardId)}
+							<button
+								class="add-card-item"
+								class:greyed={isMember}
+								disabled={isMember}
+								onclick={() => handleAddCardClick(card.cardId, isMember)}
+							>
+								<span class="add-card-item-label">
+									{card.type === 'URL' ? (card.title || card.url) : card.text.slice(0, 80)}
+								</span>
+								{#if isMember}
+									<span class="add-card-badge">added</span>
+								{/if}
+							</button>
+						{/each}
+						{#if addSuggestions.length === 0}
+							<p class="add-card-empty">No cards found</p>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{:else}
 			<div class="edit-form">
@@ -156,29 +241,6 @@
 			{/if}
 		</section>
 	</div>
-
-	<!-- Add cards bottom sheet -->
-	<BottomSheet bind:open={showAddCards} title="Add Cards">
-		{#if ($allCards ?? []).length === 0}
-			<p class="section-empty">No cards yet. Create some first!</p>
-		{:else}
-			<div class="collection-checks">
-				{#each $allCards ?? [] as card}
-					{@const isMember = (cardLinksData ?? []).some((l) => l.cardId === card.cardId)}
-					<label class="check-item">
-						<input
-							type="checkbox"
-							checked={isMember}
-							onchange={() => toggleCard(card.cardId, isMember)}
-						/>
-						<span class="check-label">
-							{card.type === 'URL' ? (card.title || card.url) : card.text.slice(0, 60)}
-						</span>
-					</label>
-				{/each}
-			</div>
-		{/if}
-	</BottomSheet>
 
 	{#if confirmDelete}
 		<ConfirmDialog
@@ -296,31 +358,87 @@
 		resize: vertical;
 	}
 
-	.collection-checks {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
+	.add-card-search {
+		position: relative;
+		margin-bottom: var(--space-lg);
 	}
 
-	.check-item {
+	.add-card-input {
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		font-size: 0.875rem;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+
+	.add-card-input:focus {
+		border-color: var(--color-primary);
+	}
+
+	.add-card-dropdown {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		margin-top: 2px;
+		max-height: 300px;
+		overflow-y: auto;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 10;
+	}
+
+	.add-card-item {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		font-size: 0.9375rem;
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		text-align: left;
+		font-size: 0.8125rem;
+		border-bottom: 1px solid var(--color-border);
+		transition: background 0.15s;
 		cursor: pointer;
 	}
 
-	.check-item input[type='checkbox'] {
-		width: 20px;
-		height: 20px;
-		flex-shrink: 0;
-		accent-color: var(--color-primary);
+	.add-card-item:last-child {
+		border-bottom: none;
 	}
 
-	.check-label {
+	.add-card-item:not(.greyed):hover {
+		background: var(--color-bg);
+	}
+
+	.add-card-item.greyed {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.add-card-item-label {
+		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.add-card-badge {
+		flex-shrink: 0;
+		font-size: 0.6875rem;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.add-card-empty {
+		padding: var(--space-md);
+		text-align: center;
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
 	}
 
 </style>

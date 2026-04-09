@@ -5,9 +5,13 @@
 	import { db } from '$lib/db';
 	import { sidebarState } from '$lib/sidebar-state.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { LayoutGrid, Settings, Plus, LogOut } from 'lucide-svelte';
+	import { LayoutGrid, Settings, Plus, LogOut, Users } from 'lucide-svelte';
 
 	const collections = liveQuery(() => db.collections.orderBy('name').toArray());
+	const followedUsers = liveQuery(() => db.follows.where('subjectType').equals('user').toArray());
+	const followedCollections = liveQuery(() =>
+		db.follows.where('subjectType').equals('collection').toArray()
+	);
 
 	function close() {
 		sidebarState.open = false;
@@ -56,6 +60,33 @@
 			<Plus size={16} />
 			<span>New Collection</span>
 		</a>
+
+		{#if ($followedUsers && $followedUsers.length > 0) || ($followedCollections && $followedCollections.length > 0)}
+			<div class="divider"></div>
+			<div class="section-label">Following</div>
+
+			{#if $followedUsers}
+				{#each $followedUsers as follow}
+					<div class="nav-item">
+						{#if follow.avatarUrl}
+							<img class="follow-avatar" src={follow.avatarUrl} alt="" />
+						{:else}
+							<Users size={16} />
+						{/if}
+						<span>{follow.displayName ?? follow.subject}</span>
+					</div>
+				{/each}
+			{/if}
+
+			{#if $followedCollections}
+				{#each $followedCollections as follow}
+					<div class="nav-item">
+						<span class="collection-dot"></span>
+						<span>{follow.displayName ?? 'Collection'}</span>
+					</div>
+				{/each}
+			{/if}
+		{/if}
 
 		<div class="divider"></div>
 
@@ -167,6 +198,14 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: var(--space-sm) var(--space-md);
+	}
+
+	.follow-avatar {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		flex-shrink: 0;
+		object-fit: cover;
 	}
 
 	.collection-dot {
