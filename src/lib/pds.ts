@@ -114,8 +114,9 @@ function recordToCard(uri: string, cid: string, value: Record<string, unknown>):
 			...base,
 			type: 'URL',
 			url: (content?.url as string) || (value.url as string) || '',
-			title: metadata?.title as string | undefined,
-			description: metadata?.description as string | undefined
+			title: (metadata?.title as string | undefined) || (content?.title as string | undefined),
+			description: (metadata?.description as string | undefined) || (content?.description as string | undefined),
+			imageUrl: (metadata?.imageUrl as string | undefined) || (content?.imageUrl as string | undefined)
 		};
 	} else {
 		// NOTE card

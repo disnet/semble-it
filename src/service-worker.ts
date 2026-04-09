@@ -35,8 +35,25 @@ self.addEventListener('fetch', (event) => {
 
 	const url = new URL(event.request.url);
 
-	// Skip non-local requests
-	if (url.origin !== self.location.origin) return;
+	// External image requests: cache-first
+	if (url.origin !== self.location.origin) {
+		const accept = event.request.headers.get('Accept') ?? '';
+		if (accept.includes('image') || /\.(png|jpe?g|gif|webp|svg|avif)(\?|$)/i.test(url.pathname)) {
+			event.respondWith(
+				caches.match(event.request).then((cached) => {
+					if (cached) return cached;
+					return fetch(event.request).then((response) => {
+						if (response.status === 200) {
+							const clone = response.clone();
+							caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+						}
+						return response;
+					});
+				})
+			);
+		}
+		return;
+	}
 
 	// Hashed build assets: cache-first (immutable)
 	if (IMMUTABLE.has(url.pathname)) {

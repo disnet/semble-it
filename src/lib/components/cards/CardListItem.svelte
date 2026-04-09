@@ -30,15 +30,20 @@
 	}
 </script>
 
-<a href="/cards/{card.cardId}" class="card-item">
-	<div class="card-item-header">
-		<CardTypeBadge type={card.type} />
-		<span class="card-date">{formatDate(card.createdAt)}</span>
-	</div>
-	<div class="card-title">{getTitle(card)}</div>
-	{#if getSubtitle(card)}
-		<div class="card-subtitle">{getSubtitle(card)}</div>
+<a href="/cards/{card.cardId}" class="card-item" class:has-image={card.type === 'URL' && card.imageUrl}>
+	{#if card.type === 'URL' && card.imageUrl}
+		<img src={card.imageUrl} alt="" class="card-image" />
 	{/if}
+	<div class="card-item-body">
+		<div class="card-item-header">
+			<CardTypeBadge type={card.type} />
+			<span class="card-date">{formatDate(card.createdAt)}</span>
+		</div>
+		<div class="card-title">{getTitle(card)}</div>
+		{#if getSubtitle(card)}
+			<div class="card-subtitle">{getSubtitle(card)}</div>
+		{/if}
+	</div>
 </a>
 
 <style>
@@ -53,8 +58,27 @@
 		transition: box-shadow 0.15s;
 	}
 
+	.card-item.has-image {
+		display: flex;
+		align-items: stretch;
+		gap: var(--space-md);
+	}
+
 	.card-item:hover {
 		box-shadow: var(--shadow-md);
+	}
+
+	.card-image {
+		width: 64px;
+		height: 64px;
+		flex-shrink: 0;
+		object-fit: cover;
+		border-radius: var(--radius-sm);
+	}
+
+	.card-item-body {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.card-item-header {

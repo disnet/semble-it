@@ -219,8 +219,15 @@
 			</div>
 
 			{#if $card.type === 'URL'}
-				<h3 class="card-title">{$card.title || 'Untitled'}</h3>
-				<a href={$card.url} target="_blank" rel="noopener" class="card-url">{$card.url}</a>
+				<div class="card-url-header" class:has-image={!!$card.imageUrl}>
+					{#if $card.imageUrl}
+						<img src={$card.imageUrl} alt="" class="card-image" />
+					{/if}
+					<div class="card-url-info">
+						<h3 class="card-title">{$card.title || 'Untitled'}</h3>
+						<a href={$card.url} target="_blank" rel="noopener" class="card-url">{$card.url}</a>
+					</div>
+				</div>
 				{#if $card.description}
 					<p class="card-description">{$card.description}</p>
 				{/if}
@@ -384,6 +391,29 @@
 		font-size: 1.25rem;
 		font-weight: 600;
 		margin-bottom: var(--space-xs);
+	}
+
+	.card-url-header {
+		margin-bottom: var(--space-sm);
+	}
+
+	.card-url-header.has-image {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-md);
+	}
+
+	.card-image {
+		width: 80px;
+		height: 80px;
+		flex-shrink: 0;
+		object-fit: cover;
+		border-radius: var(--radius-md);
+	}
+
+	.card-url-info {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.card-url {

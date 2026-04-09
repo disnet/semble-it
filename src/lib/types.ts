@@ -16,6 +16,7 @@ export interface UrlCard extends CardBase {
 	url: string;
 	title?: string;
 	description?: string;
+	imageUrl?: string;
 }
 
 export interface NoteCard extends CardBase {
