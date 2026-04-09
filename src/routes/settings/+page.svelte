@@ -23,7 +23,7 @@
 
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `assemble-export-${new Date().toISOString().slice(0, 10)}.json`;
+		a.download = `sembleit-export-${new Date().toISOString().slice(0, 10)}.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 
@@ -152,7 +152,7 @@
 	<section class="settings-section">
 		<h3 class="section-title">About</h3>
 		<p class="about-text">
-			Assemble is a local-first frontend for managing semble cards, collections, and connections. All data is stored on your device.
+			SembleIt is a local-first frontend for managing semble cards, collections, and connections. All data is stored on your device.
 		</p>
 	</section>
 </div>

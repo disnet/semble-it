@@ -1,6 +1,6 @@
 {
-	"name": "Assemble",
-	"short_name": "Assemble",
+	"name": "SembleIt",
+	"short_name": "SembleIt",
 	"description": "Local-first card manager for semble",
 	"start_url": "/cards",
 	"display": "standalone",

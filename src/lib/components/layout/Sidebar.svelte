@@ -29,7 +29,7 @@
 
 <nav class="sidebar" class:open={sidebarState.open}>
 	<div class="sidebar-header">
-		<h1 class="logo">Assemble</h1>
+		<h1 class="logo">SembleIt</h1>
 	</div>
 
 	<div class="sidebar-content">

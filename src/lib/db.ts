@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { Card, Collection, CollectionCard, Connection, Follow, CacheMetadata, RemoteDataCache } from './types';
 
-class AssembleDB extends Dexie {
+class SembleItDB extends Dexie {
 	cards!: Table<Card>;
 	collections!: Table<Collection>;
 	collectionCards!: Table<CollectionCard>;
@@ -11,7 +11,7 @@ class AssembleDB extends Dexie {
 	remoteData!: Table<RemoteDataCache>;
 
 	constructor() {
-		super('assemble');
+		super('sembleit');
 		this.version(1).stores({
 			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt',
 			collections: 'collectionId, name, createdAt',
@@ -43,4 +43,4 @@ class AssembleDB extends Dexie {
 	}
 }
 
-export const db = new AssembleDB();
+export const db = new SembleItDB();

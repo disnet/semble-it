@@ -17,7 +17,7 @@
 
 <div class="login-page">
 	<div class="login-card">
-		<h1 class="login-title">Assemble</h1>
+		<h1 class="login-title">SembleIt</h1>
 		<p class="login-subtitle">Local-first card manager for semble</p>
 
 		<form class="login-form" onsubmit={(e) => { e.preventDefault(); login(); }}>
