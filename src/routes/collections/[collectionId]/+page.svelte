@@ -10,6 +10,7 @@
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
+	import { Ellipsis } from 'lucide-svelte';
 
 	const PAGE_SIZE = 20;
 	let visibleCount = $state(PAGE_SIZE);
@@ -27,6 +28,7 @@
 		addSearchFocused = false;
 		editing = false;
 		confirmDelete = false;
+		moreOpen = false;
 
 		const sub1 = liveQuery(() => db.collections.get(id)).subscribe((val) => {
 			collectionData = val;
@@ -104,6 +106,20 @@
 		return () => document.removeEventListener('mousedown', handleAddSearchClickOutside);
 	});
 
+	let moreOpen = $state(false);
+	let moreContainerEl: HTMLDivElement | undefined = $state(undefined);
+
+	function handleMoreClickOutside(e: MouseEvent) {
+		if (moreContainerEl && !moreContainerEl.contains(e.target as Node)) {
+			moreOpen = false;
+		}
+	}
+
+	$effect(() => {
+		document.addEventListener('mousedown', handleMoreClickOutside);
+		return () => document.removeEventListener('mousedown', handleMoreClickOutside);
+	});
+
 	let editing = $state(false);
 	let editName = $state('');
 	let editDescription = $state('');
@@ -169,7 +185,22 @@
 	}
 </script>
 
-<PageHeader title={collectionData?.name ?? 'Collection'} />
+<PageHeader title={collectionData?.name ?? 'Collection'}>
+	{#snippet actions()}
+		<span class="header-card-count">{memberCards.length} card{memberCards.length !== 1 ? 's' : ''}</span>
+		<div class="more-container" bind:this={moreContainerEl}>
+			<button class="more-btn" onclick={() => (moreOpen = !moreOpen)}>
+				<Ellipsis size={20} />
+			</button>
+			{#if moreOpen}
+				<div class="more-popup">
+					<button class="more-item" onclick={() => { moreOpen = false; startEdit(); }}>Edit</button>
+					<button class="more-item danger" onclick={() => { moreOpen = false; confirmDelete = true; }}>Delete</button>
+				</div>
+			{/if}
+		</div>
+	{/snippet}
+</PageHeader>
 <RefreshBar cacheKey="pds-sync" onrefresh={handleRefresh} />
 
 {#if collectionData}
@@ -179,20 +210,15 @@
 				<p class="collection-desc">{collectionData.description}</p>
 			{/if}
 
-			<div class="actions">
-				<button class="action-btn" onclick={startEdit}>Edit</button>
-				<button class="action-btn danger" onclick={() => (confirmDelete = true)}>Delete</button>
-			</div>
-
 			<div class="add-card-search" bind:this={addContainerEl}>
-				<input
-					type="search"
-					placeholder="Add to collection..."
-					bind:value={addSearch}
-					bind:this={addSearchEl}
-					onfocus={() => (addSearchFocused = true)}
-					class="add-card-input"
-				/>
+					<input
+						type="search"
+						placeholder="Add to collection..."
+						bind:value={addSearch}
+						bind:this={addSearchEl}
+						onfocus={() => (addSearchFocused = true)}
+						class="add-card-input"
+					/>
 				{#if addSearchFocused}
 					<div class="add-card-dropdown">
 						{#each addSuggestions as { card, isMember } (card.cardId)}
@@ -215,7 +241,7 @@
 						{/if}
 					</div>
 				{/if}
-			</div>
+				</div>
 		{:else}
 			<div class="edit-form">
 				<label class="field">
@@ -234,7 +260,6 @@
 		{/if}
 
 		<section class="card-section">
-			<h4 class="section-title">{memberCards.length} card{memberCards.length !== 1 ? 's' : ''}</h4>
 			{#if memberCards.length === 0}
 				<p class="section-empty">No cards in this collection yet</p>
 			{:else}
@@ -275,7 +300,6 @@
 		margin-bottom: var(--space-md);
 	}
 
-	.actions,
 	.edit-actions {
 		display: flex;
 		gap: var(--space-sm);
@@ -295,24 +319,70 @@
 		background: var(--color-bg);
 	}
 
-	.action-btn.danger {
-		color: var(--color-danger);
-		border-color: var(--color-danger);
+	.more-container {
+		position: relative;
+		flex-shrink: 0;
 	}
 
-	.action-btn.danger:hover {
+	.more-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-md);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.more-btn:hover {
+		background: var(--color-bg);
+	}
+
+	.more-popup {
+		position: absolute;
+		right: 0;
+		top: 100%;
+		margin-top: 4px;
+		min-width: 120px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 20;
+		overflow: hidden;
+	}
+
+	.more-item {
+		display: block;
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		text-align: left;
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.more-item:hover {
+		background: var(--color-bg);
+	}
+
+	.more-item.danger {
+		color: var(--color-danger);
+	}
+
+	.more-item.danger:hover {
 		background: var(--color-danger-light);
 	}
 
 	.card-section {
-		border-top: 1px solid var(--color-border);
-		padding-top: var(--space-md);
 	}
 
-	.section-title {
-		font-size: 0.9375rem;
-		font-weight: 600;
-		margin-bottom: var(--space-sm);
+	.header-card-count {
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		font-weight: 500;
 	}
 
 	.section-empty {

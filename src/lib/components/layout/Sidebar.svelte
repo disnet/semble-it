@@ -44,8 +44,6 @@
 			<span>All Cards</span>
 		</a>
 
-		<div class="divider"></div>
-
 		<div class="section-label">Collections</div>
 
 		{#if $collections}
@@ -68,7 +66,6 @@
 		</a>
 
 		{#if ($followedUsers && $followedUsers.length > 0) || ($followedCollections && $followedCollections.length > 0)}
-			<div class="divider"></div>
 			<div class="section-label">Following</div>
 
 			{#if $followedUsers}
@@ -103,8 +100,6 @@
 				{/each}
 			{/if}
 		{/if}
-
-		<div class="divider"></div>
 
 		<button class="nav-item logout" onclick={async () => { close(); await auth.logout(); goto('/login'); }}>
 			<LogOut size={20} />
@@ -165,7 +160,6 @@
 
 	.sidebar-header {
 		padding: var(--space-lg) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
 	}
 
 	.logo {
@@ -208,13 +202,7 @@
 		font-size: 0.875rem;
 	}
 
-	.divider {
-		height: 1px;
-		background: var(--color-border);
-		margin: var(--space-sm) var(--space-md);
-	}
-
-	.section-label {
+.section-label {
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
