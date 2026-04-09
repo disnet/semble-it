@@ -8,6 +8,10 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
+	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
+
+	const PAGE_SIZE = 20;
+	let visibleCount = $state(PAGE_SIZE);
 
 	const collectionId = $derived($page.params.collectionId!);
 
@@ -123,9 +127,12 @@
 				<p class="section-empty">No cards in this collection yet</p>
 			{:else}
 				<div class="card-list">
-					{#each memberCards as card (card.cardId)}
+					{#each memberCards.slice(0, visibleCount) as card (card.cardId)}
 						<CardListItem {card} />
 					{/each}
+					{#if visibleCount < memberCards.length}
+						<ScrollSentinel onVisible={() => (visibleCount += PAGE_SIZE)} />
+					{/if}
 				</div>
 			{/if}
 		</section>

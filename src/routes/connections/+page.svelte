@@ -3,6 +3,10 @@
 	import { db } from '$lib/db';
 	import type { Card } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
+
+	const PAGE_SIZE = 20;
+	let visibleCount = $state(PAGE_SIZE);
 
 	const connections = liveQuery(() => db.connections.orderBy('createdAt').reverse().toArray());
 	const allCards = liveQuery(() => db.cards.toArray());
@@ -38,13 +42,16 @@
 		</div>
 	{:else}
 		<div class="connection-list">
-			{#each $connections ?? [] as conn (conn.connectionId)}
+			{#each ($connections ?? []).slice(0, visibleCount) as conn (conn.connectionId)}
 				<a href="/connections/{conn.connectionId}" class="connection-item">
 					<span class="conn-source">{getEndpointName(conn.sourceCardId)}</span>
 					<span class="conn-type-badge">{conn.type}</span>
 					<span class="conn-target">{getEndpointName(conn.targetCardId)}</span>
 				</a>
 			{/each}
+			{#if visibleCount < ($connections ?? []).length}
+				<ScrollSentinel onVisible={() => (visibleCount += PAGE_SIZE)} />
+			{/if}
 		</div>
 	{/if}
 </div>

@@ -5,10 +5,13 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardFilterBar from '$lib/components/cards/CardFilterBar.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
+	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
+	const PAGE_SIZE = 20;
 	type FilterValue = CardType | 'ALL';
 	let filter: FilterValue = $state('ALL');
 	let search = $state('');
+	let visibleCount = $state(PAGE_SIZE);
 
 	const allCards = liveQuery(() => db.cards.orderBy('createdAt').reverse().toArray());
 
@@ -35,6 +38,16 @@
 		}
 		return cards;
 	});
+
+	// Reset visible count when filters change
+	$effect(() => {
+		filter;
+		search;
+		visibleCount = PAGE_SIZE;
+	});
+
+	let visibleCards = $derived(filteredCards.slice(0, visibleCount));
+	let hasMore = $derived(visibleCount < filteredCards.length);
 </script>
 
 <PageHeader title="Cards" />
@@ -52,9 +65,12 @@
 			<p class="empty-text">Tap the + button to add your first card</p>
 		</div>
 	{:else}
-		{#each filteredCards as card (card.cardId)}
+		{#each visibleCards as card (card.cardId)}
 			<CardListItem {card} />
 		{/each}
+		{#if hasMore}
+			<ScrollSentinel onVisible={() => (visibleCount += PAGE_SIZE)} />
+		{/if}
 	{/if}
 </div>
 
