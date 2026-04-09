@@ -5,7 +5,7 @@
 	import { db } from '$lib/db';
 	import { sidebarState } from '$lib/sidebar-state.svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { LayoutGrid, Settings, Plus, LogOut, Users } from 'lucide-svelte';
+	import { LayoutGrid, Plus, LogOut, Users } from 'lucide-svelte';
 
 	const collections = liveQuery(() => db.collections.orderBy('name').toArray());
 	const followedUsers = liveQuery(() => db.follows.where('subjectType').equals('user').toArray());
@@ -105,11 +105,6 @@
 		{/if}
 
 		<div class="divider"></div>
-
-		<a href="/settings" class="nav-item" class:active={isActive('/settings')} onclick={closeOnMobile}>
-			<Settings size={20} />
-			<span>Settings</span>
-		</a>
 
 		<button class="nav-item logout" onclick={async () => { close(); await auth.logout(); goto('/login'); }}>
 			<LogOut size={20} />
