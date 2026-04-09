@@ -67,23 +67,33 @@
 
 			{#if $followedUsers}
 				{#each $followedUsers as follow}
-					<div class="nav-item">
+					<a
+						href="/following/users/{follow.subject}"
+						class="nav-item"
+						class:active={isActive(`/following/users/${follow.subject}`)}
+						onclick={close}
+					>
 						{#if follow.avatarUrl}
 							<img class="follow-avatar" src={follow.avatarUrl} alt="" />
 						{:else}
 							<Users size={16} />
 						{/if}
 						<span>{follow.displayName ?? follow.subject}</span>
-					</div>
+					</a>
 				{/each}
 			{/if}
 
 			{#if $followedCollections}
 				{#each $followedCollections as follow}
-					<div class="nav-item">
+					<a
+						href="/following/collections/{encodeURIComponent(follow.subject)}"
+						class="nav-item"
+						class:active={isActive(`/following/collections/${encodeURIComponent(follow.subject)}`)}
+						onclick={close}
+					>
 						<span class="collection-dot"></span>
 						<span>{follow.displayName ?? 'Collection'}</span>
-					</div>
+					</a>
 				{/each}
 			{/if}
 		{/if}

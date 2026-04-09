@@ -511,6 +511,52 @@ async function resolvePdsEndpoint(did: string): Promise<string | null> {
 	}
 }
 
+// --- Remote PDS fetch helpers ---
+
+export async function fetchRemoteRecords(
+	did: string,
+	collection: string
+): Promise<Array<{ uri: string; cid: string; value: Record<string, unknown> }>> {
+	const pds = await resolvePdsEndpoint(did);
+	if (!pds) return [];
+
+	const records: Array<{ uri: string; cid: string; value: Record<string, unknown> }> = [];
+	let cursor: string | undefined;
+
+	do {
+		const params = new URLSearchParams({
+			repo: did,
+			collection,
+			limit: '100',
+			...(cursor ? { cursor } : {})
+		});
+		const res = await fetch(`${pds}/xrpc/com.atproto.repo.listRecords?${params}`);
+		if (!res.ok) break;
+		const data = await res.json();
+		for (const rec of data.records ?? []) {
+			records.push({ uri: rec.uri, cid: rec.cid, value: rec.value });
+		}
+		cursor = data.cursor;
+	} while (cursor);
+
+	return records;
+}
+
+export async function fetchRemoteRecord(
+	did: string,
+	collection: string,
+	rkey: string
+): Promise<Record<string, unknown> | null> {
+	const pds = await resolvePdsEndpoint(did);
+	if (!pds) return null;
+
+	const params = new URLSearchParams({ repo: did, collection, rkey });
+	const res = await fetch(`${pds}/xrpc/com.atproto.repo.getRecord?${params}`);
+	if (!res.ok) return null;
+	const data = await res.json();
+	return data.value as Record<string, unknown>;
+}
+
 // --- Resolve follow display metadata ---
 
 export async function resolveFollowMetadata(session: OAuthSession): Promise<void> {
