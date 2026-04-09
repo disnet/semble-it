@@ -1,6 +1,7 @@
 import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
 import type { OAuthSession } from '@atproto/oauth-client-browser';
 import { buildAtprotoLoopbackClientMetadata } from '@atproto/oauth-types';
+import { closeDb } from './db';
 
 let client: BrowserOAuthClient | null = null;
 let session: OAuthSession | null = $state(null);
@@ -110,6 +111,7 @@ export const auth = {
 		} catch {
 			// ignore signOut errors
 		}
+		closeDb();
 		session = null;
 		handle = null;
 		avatar = null;

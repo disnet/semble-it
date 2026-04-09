@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
 	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata, getCacheTimestamp } from '$lib/pds';
+	import { openDb } from '$lib/db';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
 
@@ -25,6 +26,7 @@
 
 		await auth.init();
 		if (auth.isLoggedIn && auth.session) {
+			openDb(auth.session.did);
 			// Only auto-sync on first-ever load (no cached data yet)
 			const lastSync = await getCacheTimestamp('pds-sync');
 			if (!lastSync) {

@@ -10,28 +10,9 @@ class SembleItDB extends Dexie {
 	cacheMetadata!: Table<CacheMetadata>;
 	remoteData!: Table<RemoteDataCache>;
 
-	constructor() {
-		super('sembleit');
+	constructor(did: string) {
+		super(`sembleit-${did}`);
 		this.version(1).stores({
-			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt',
-			collections: 'collectionId, name, createdAt',
-			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt',
-			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt'
-		});
-		this.version(2).stores({
-			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt, uri',
-			collections: 'collectionId, name, createdAt, uri',
-			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
-			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt, uri'
-		});
-		this.version(3).stores({
-			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt, uri',
-			collections: 'collectionId, name, createdAt, uri',
-			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
-			connections: 'connectionId, sourceCardId, targetCardId, type, createdAt, uri',
-			follows: 'followId, subject, subjectType, createdAt, uri'
-		});
-		this.version(4).stores({
 			cards: 'cardId, type, url, parentCardId, createdAt, updatedAt, uri',
 			collections: 'collectionId, name, createdAt, uri',
 			collectionCards: '[collectionId+cardId], collectionId, cardId, addedAt, uri',
@@ -43,4 +24,15 @@ class SembleItDB extends Dexie {
 	}
 }
 
-export const db = new SembleItDB();
+export let db: SembleItDB;
+
+export function openDb(did: string) {
+	if (db) db.close();
+	db = new SembleItDB(did);
+}
+
+export function closeDb() {
+	if (db) {
+		db.close();
+	}
+}
