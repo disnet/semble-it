@@ -79,6 +79,12 @@
 		min-height: 100dvh;
 	}
 
+	@media (min-width: 768px) {
+		.main-content {
+			margin-left: var(--sidebar-width);
+		}
+	}
+
 	.loading-screen {
 		min-height: 100dvh;
 		display: flex;

@@ -55,7 +55,6 @@
 <style>
 	.form-container {
 		padding: var(--space-md);
-		max-width: 600px;
 	}
 
 	.field {

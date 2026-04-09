@@ -97,7 +97,6 @@
 <style>
 	.detail-container {
 		padding: var(--space-md);
-		max-width: 600px;
 	}
 
 	.loading-text {

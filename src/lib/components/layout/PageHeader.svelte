@@ -50,6 +50,12 @@
 		background: var(--color-primary-light);
 	}
 
+	@media (min-width: 768px) {
+		.menu-btn {
+			display: none;
+		}
+	}
+
 	.page-title {
 		flex: 1;
 		font-size: 1.125rem;

@@ -17,6 +17,12 @@
 		sidebarState.open = false;
 	}
 
+	function closeOnMobile() {
+		if (!window.matchMedia('(min-width: 768px)').matches) {
+			close();
+		}
+	}
+
 	function isActive(path: string): boolean {
 		return $page.url.pathname === path;
 	}
@@ -33,7 +39,7 @@
 	</div>
 
 	<div class="sidebar-content">
-		<a href="/cards" class="nav-item" class:active={isActive('/cards')} onclick={close}>
+		<a href="/cards" class="nav-item" class:active={isActive('/cards')} onclick={closeOnMobile}>
 			<LayoutGrid size={20} />
 			<span>All Cards</span>
 		</a>
@@ -48,7 +54,7 @@
 					href="/collections/{collection.collectionId}"
 					class="nav-item"
 					class:active={isActive(`/collections/${collection.collectionId}`)}
-					onclick={close}
+					onclick={closeOnMobile}
 				>
 					<span class="collection-dot"></span>
 					<span>{collection.name}</span>
@@ -56,7 +62,7 @@
 			{/each}
 		{/if}
 
-		<a href="/collections/new" class="nav-item new-collection" onclick={close}>
+		<a href="/collections/new" class="nav-item new-collection" onclick={closeOnMobile}>
 			<Plus size={16} />
 			<span>New Collection</span>
 		</a>
@@ -71,7 +77,7 @@
 						href="/following/users/{follow.subject}"
 						class="nav-item"
 						class:active={isActive(`/following/users/${follow.subject}`)}
-						onclick={close}
+						onclick={closeOnMobile}
 					>
 						{#if follow.avatarUrl}
 							<img class="follow-avatar" src={follow.avatarUrl} alt="" />
@@ -89,7 +95,7 @@
 						href="/following/collections/{encodeURIComponent(follow.subject)}"
 						class="nav-item"
 						class:active={isActive(`/following/collections/${encodeURIComponent(follow.subject)}`)}
-						onclick={close}
+						onclick={closeOnMobile}
 					>
 						<span class="collection-dot"></span>
 						<span>{follow.displayName ?? 'Collection'}</span>
@@ -100,7 +106,7 @@
 
 		<div class="divider"></div>
 
-		<a href="/settings" class="nav-item" class:active={isActive('/settings')} onclick={close}>
+		<a href="/settings" class="nav-item" class:active={isActive('/settings')} onclick={closeOnMobile}>
 			<Settings size={20} />
 			<span>Settings</span>
 		</a>
@@ -148,6 +154,18 @@
 
 	.sidebar.open {
 		transform: translateX(0);
+	}
+
+	@media (min-width: 768px) {
+		.overlay {
+			display: none;
+		}
+
+		.sidebar {
+			transform: translateX(0);
+			box-shadow: none;
+			border-right: 1px solid var(--color-border);
+		}
 	}
 
 	.sidebar-header {

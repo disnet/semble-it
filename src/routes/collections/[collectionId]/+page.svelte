@@ -266,7 +266,6 @@
 <style>
 	.detail-container {
 		padding: var(--space-md);
-		max-width: 600px;
 	}
 
 	.collection-desc {

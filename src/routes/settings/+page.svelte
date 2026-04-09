@@ -169,7 +169,6 @@
 <style>
 	.settings-container {
 		padding: var(--space-md);
-		max-width: 600px;
 	}
 
 	.settings-section {
