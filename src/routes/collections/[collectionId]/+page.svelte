@@ -15,16 +15,34 @@
 
 	const collectionId = $derived($page.params.collectionId!);
 
-	const collection = liveQuery(() => db.collections.get(collectionId));
-
-	const cardLinks = liveQuery(() =>
-		db.collectionCards.where('collectionId').equals(collectionId).toArray()
-	);
-
+	let collectionData = $state<import('$lib/types').Collection | undefined>(undefined);
+	let cardLinksData = $state<import('$lib/types').CollectionCard[]>([]);
 	const allCards = liveQuery(() => db.cards.toArray());
 
+	$effect(() => {
+		const id = collectionId;
+		visibleCount = PAGE_SIZE;
+		showAddCards = false;
+		editing = false;
+		confirmDelete = false;
+
+		const sub1 = liveQuery(() => db.collections.get(id)).subscribe((val) => {
+			collectionData = val;
+		});
+		const sub2 = liveQuery(() =>
+			db.collectionCards.where('collectionId').equals(id).toArray()
+		).subscribe((val) => {
+			cardLinksData = val;
+		});
+
+		return () => {
+			sub1.unsubscribe();
+			sub2.unsubscribe();
+		};
+	});
+
 	let memberCards = $derived.by(() => {
-		const links = $cardLinks ?? [];
+		const links = cardLinksData;
 		const cards = $allCards ?? [];
 		const memberIds = new Set(links.map((l) => l.cardId));
 		return cards.filter((c) => memberIds.has(c.cardId));
@@ -37,16 +55,16 @@
 	let confirmDelete = $state(false);
 
 	function startEdit() {
-		if (!$collection) return;
-		editName = $collection.name;
-		editDescription = $collection.description ?? '';
+		if (!collectionData) return;
+		editName = collectionData.name;
+		editDescription = collectionData.description ?? '';
 		editing = true;
 	}
 
 	async function saveEdit() {
-		if (!editName.trim() || !$collection) return;
+		if (!editName.trim() || !collectionData) return;
 		const updated = {
-			...$collection,
+			...collectionData,
 			name: editName.trim(),
 			description: editDescription.trim() || undefined,
 			updatedAt: new Date()
@@ -57,10 +75,10 @@
 	}
 
 	async function deleteCollection() {
-		if (auth.session && $collection) {
+		if (auth.session && collectionData) {
 			const ccLinks = await db.collectionCards.where('collectionId').equals(collectionId).toArray();
 			await Promise.all([
-				deleteCollectionFromPDS(auth.session, $collection),
+				deleteCollectionFromPDS(auth.session, collectionData),
 				...ccLinks.map((cc) => deleteCollectionLinkFromPDS(auth.session!, cc))
 			]);
 		}
@@ -73,12 +91,12 @@
 
 	async function toggleCard(cardId: string, isMember: boolean) {
 		if (isMember) {
-			const ccLink = ($cardLinks ?? []).find((l) => l.cardId === cardId);
+			const ccLink = (cardLinksData ?? []).find((l) => l.cardId === cardId);
 			if (auth.session && ccLink) await deleteCollectionLinkFromPDS(auth.session, ccLink);
 			await db.collectionCards.where('[collectionId+cardId]').equals([collectionId, cardId]).delete();
 		} else {
 			const card = ($allCards ?? []).find((c) => c.cardId === cardId);
-			const col = $collection;
+			const col = collectionData;
 			const cc = { collectionId, cardId, addedAt: new Date() } as import('$lib/types').CollectionCard;
 			if (auth.session && card && col) {
 				const ref = await createCollectionLinkInPDS(auth.session, card, col);
@@ -90,13 +108,13 @@
 	}
 </script>
 
-<PageHeader title={$collection?.name ?? 'Collection'} />
+<PageHeader title={collectionData?.name ?? 'Collection'} />
 
-{#if $collection}
+{#if collectionData}
 	<div class="detail-container">
 		{#if !editing}
-			{#if $collection.description}
-				<p class="collection-desc">{$collection.description}</p>
+			{#if collectionData.description}
+				<p class="collection-desc">{collectionData.description}</p>
 			{/if}
 
 			<div class="actions">
@@ -145,7 +163,7 @@
 		{:else}
 			<div class="collection-checks">
 				{#each $allCards ?? [] as card}
-					{@const isMember = ($cardLinks ?? []).some((l) => l.cardId === card.cardId)}
+					{@const isMember = (cardLinksData ?? []).some((l) => l.cardId === card.cardId)}
 					<label class="check-item">
 						<input
 							type="checkbox"
