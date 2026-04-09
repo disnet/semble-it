@@ -8,13 +8,15 @@ declare const self: ServiceWorkerGlobalScope;
 import { build, files, version } from '$service-worker';
 
 const CACHE = `cache-${version}`;
-const ASSETS = [...build, ...files];
+
+// build assets have hashed filenames and are immutable
+const IMMUTABLE = new Set(build);
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches
 			.open(CACHE)
-			.then((cache) => cache.addAll(ASSETS))
+			.then((cache) => cache.addAll(build))
 			.then(() => self.skipWaiting())
 	);
 });
@@ -36,33 +38,33 @@ self.addEventListener('fetch', (event) => {
 	// Skip non-local requests
 	if (url.origin !== self.location.origin) return;
 
-	// Navigation requests (HTML pages): network-first so updates are seen immediately
-	if (event.request.mode === 'navigate') {
+	// Hashed build assets: cache-first (immutable)
+	if (IMMUTABLE.has(url.pathname)) {
 		event.respondWith(
-			fetch(event.request)
-				.then((response) => {
+			caches.match(event.request).then((cached) => {
+				if (cached) return cached;
+				return fetch(event.request).then((response) => {
 					if (response.status === 200) {
 						const clone = response.clone();
 						caches.open(CACHE).then((cache) => cache.put(event.request, clone));
 					}
 					return response;
-				})
-				.catch(() => caches.match(event.request).then((cached) => cached ?? Response.error()))
+				});
+			})
 		);
 		return;
 	}
 
-	// Static assets: cache-first
+	// Everything else (navigation, static files): network-first
 	event.respondWith(
-		caches.match(event.request).then((cached) => {
-			if (cached) return cached;
-			return fetch(event.request).then((response) => {
+		fetch(event.request)
+			.then((response) => {
 				if (response.status === 200) {
 					const clone = response.clone();
 					caches.open(CACHE).then((cache) => cache.put(event.request, clone));
 				}
 				return response;
-			});
-		})
+			})
+			.catch(() => caches.match(event.request).then((cached) => cached ?? Response.error()))
 	);
 });
