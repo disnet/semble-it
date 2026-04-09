@@ -5,14 +5,21 @@
 	import { db } from '$lib/db';
 	import { auth } from '$lib/auth.svelte';
 	import { updateCollectionInPDS, deleteCollectionFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, syncFromPDS, resolveFollowMetadata } from '$lib/pds';
+	import type { CardType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import RefreshBar from '$lib/components/shared/RefreshBar.svelte';
+	import CardFilterBar from '$lib/components/cards/CardFilterBar.svelte';
 	import CardListItem from '$lib/components/cards/CardListItem.svelte';
 	import ConfirmDialog from '$lib/components/shared/ConfirmDialog.svelte';
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
-	import { Ellipsis } from 'lucide-svelte';
+	import { Ellipsis, Plus } from 'lucide-svelte';
 
 	const PAGE_SIZE = 20;
+	type FilterValue = CardType | 'ALL';
+	type SortValue = 'newest' | 'oldest';
+	let filter: FilterValue = $state('ALL');
+	let sort: SortValue = $state('newest');
+	let search = $state('');
 	let visibleCount = $state(PAGE_SIZE);
 
 	const collectionId = $derived($page.params.collectionId!);
@@ -24,6 +31,9 @@
 	$effect(() => {
 		const id = collectionId;
 		visibleCount = PAGE_SIZE;
+		filter = 'ALL';
+		sort = 'newest';
+		search = '';
 		addSearch = '';
 		addSearchFocused = false;
 		editing = false;
@@ -52,6 +62,41 @@
 		return cards
 			.filter((c) => addedAtMap.has(c.cardId))
 			.sort((a, b) => (addedAtMap.get(b.cardId)! - addedAtMap.get(a.cardId)!));
+	});
+
+	let filteredMemberCards = $derived.by(() => {
+		let cards = memberCards;
+		if (filter !== 'ALL') {
+			cards = cards.filter((c) => c.type === filter);
+		}
+		if (search.trim()) {
+			const q = search.toLowerCase();
+			cards = cards.filter((c) => {
+				if (c.type === 'URL') {
+					return (
+						c.url.toLowerCase().includes(q) ||
+						c.title?.toLowerCase().includes(q) ||
+						c.description?.toLowerCase().includes(q)
+					);
+				}
+				if (c.type === 'NOTE') {
+					return c.text.toLowerCase().includes(q);
+				}
+				return false;
+			});
+		}
+		if (sort === 'oldest') {
+			cards = [...cards].reverse();
+		}
+		return cards;
+	});
+
+	// Reset visible count when filters change
+	$effect(() => {
+		filter;
+		sort;
+		search;
+		visibleCount = PAGE_SIZE;
 	});
 
 	let addSearch = $state('');
@@ -210,38 +255,46 @@
 				<p class="collection-desc">{collectionData.description}</p>
 			{/if}
 
-			<div class="add-card-search" bind:this={addContainerEl}>
-					<input
-						type="search"
-						placeholder="Add to collection..."
-						bind:value={addSearch}
-						bind:this={addSearchEl}
-						onfocus={() => (addSearchFocused = true)}
-						class="add-card-input"
-					/>
-				{#if addSearchFocused}
-					<div class="add-card-dropdown">
-						{#each addSuggestions as { card, isMember } (card.cardId)}
-							<button
-								class="add-card-item"
-								class:greyed={isMember}
-								disabled={isMember}
-								onclick={() => handleAddCardClick(card.cardId, isMember)}
-							>
-								<span class="add-card-item-label">
-									{card.type === 'URL' ? (card.title || card.url) : card.text.slice(0, 80)}
-								</span>
-								{#if isMember}
-									<span class="add-card-badge">added</span>
+			<div class="toolbar">
+				<CardFilterBar bind:filter bind:sort />
+				<input type="search" placeholder="Search cards…" bind:value={search} class="toolbar-search" />
+				<div class="add-card-search" bind:this={addContainerEl}>
+					<button class="add-btn" onclick={() => { addSearchFocused = !addSearchFocused; if (!addSearchFocused) { addSearch = ''; } else { setTimeout(() => addSearchEl?.focus(), 0); } }}>
+						<Plus size={18} />
+					</button>
+					{#if addSearchFocused}
+						<div class="add-card-dropdown">
+							<input
+								type="search"
+								placeholder="Add card..."
+								bind:value={addSearch}
+								bind:this={addSearchEl}
+								class="add-card-input"
+							/>
+							<div class="add-card-list">
+								{#each addSuggestions as { card, isMember } (card.cardId)}
+									<button
+										class="add-card-item"
+										class:greyed={isMember}
+										disabled={isMember}
+										onclick={() => handleAddCardClick(card.cardId, isMember)}
+									>
+										<span class="add-card-item-label">
+											{card.type === 'URL' ? (card.title || card.url) : card.text.slice(0, 80)}
+										</span>
+										{#if isMember}
+											<span class="add-card-badge">added</span>
+										{/if}
+									</button>
+								{/each}
+								{#if addSuggestions.length === 0}
+									<p class="add-card-empty">No cards found</p>
 								{/if}
-							</button>
-						{/each}
-						{#if addSuggestions.length === 0}
-							<p class="add-card-empty">No cards found</p>
-						{/if}
-					</div>
-				{/if}
+							</div>
+						</div>
+					{/if}
 				</div>
+			</div>
 		{:else}
 			<div class="edit-form">
 				<label class="field">
@@ -260,14 +313,14 @@
 		{/if}
 
 		<section class="card-section">
-			{#if memberCards.length === 0}
-				<p class="section-empty">No cards in this collection yet</p>
+			{#if filteredMemberCards.length === 0}
+				<p class="section-empty">{memberCards.length === 0 ? 'No cards in this collection yet' : 'No cards match your filters'}</p>
 			{:else}
 				<div class="card-list">
-					{#each memberCards.slice(0, visibleCount) as card (card.cardId)}
+					{#each filteredMemberCards.slice(0, visibleCount) as card (card.cardId)}
 						<CardListItem {card} />
 					{/each}
-					{#if visibleCount < memberCards.length}
+					{#if visibleCount < filteredMemberCards.length}
 						<ScrollSentinel onVisible={() => (visibleCount += PAGE_SIZE)} />
 					{/if}
 				</div>
@@ -435,39 +488,84 @@
 		resize: vertical;
 	}
 
-	.add-card-search {
-		position: relative;
-		margin-bottom: var(--space-lg);
+	.toolbar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
 	}
 
-	.add-card-input {
-		width: 100%;
-		padding: var(--space-sm) var(--space-md);
+	.toolbar-search {
+		flex: 1;
+		min-width: 0;
+		padding: 6px var(--space-md);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-full);
 		background: var(--color-surface);
 		font-size: 0.875rem;
 		outline: none;
 		transition: border-color 0.15s;
 	}
 
-	.add-card-input:focus {
+	.toolbar-search:focus {
 		border-color: var(--color-primary);
+	}
+
+	.add-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		border-radius: var(--radius-full);
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: opacity 0.15s;
+	}
+
+	.add-btn:hover {
+		opacity: 0.85;
+	}
+
+	.add-card-search {
+		position: relative;
+	}
+
+	.add-card-input {
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+		font-size: 0.875rem;
+		outline: none;
+	}
+
+	.add-card-input:focus {
+		border-bottom-color: var(--color-primary);
 	}
 
 	.add-card-dropdown {
 		position: absolute;
-		left: 0;
 		right: 0;
 		top: 100%;
-		margin-top: 2px;
-		max-height: 300px;
+		margin-top: 6px;
+		width: 280px;
+		max-height: 340px;
 		overflow-y: auto;
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-md, 8px);
 		background: var(--color-surface);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 10;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+		z-index: 100;
+	}
+
+	.add-card-list {
+		max-height: 280px;
+		overflow-y: auto;
 	}
 
 	.add-card-item {

@@ -562,6 +562,7 @@ export async function fetchRemoteRecord(
 // --- Cache helpers ---
 
 export async function getCacheTimestamp(key: string): Promise<Date | null> {
+	if (!db) return null;
 	const entry = await db.cacheMetadata.get(key);
 	return entry?.fetchedAt ?? null;
 }
@@ -574,6 +575,7 @@ export type RemoteUserData = {
 };
 
 export async function fetchRemoteUserCached(did: string): Promise<RemoteUserData | null> {
+	if (!db) return null;
 	const cacheKey = `remote-user:${did}`;
 	const cached = await db.remoteData.where('source').equals(cacheKey).toArray();
 	if (cached.length === 0) return null;
@@ -622,6 +624,7 @@ export type RemoteCollectionData = {
 };
 
 export async function fetchRemoteCollectionCached(subject: string): Promise<RemoteCollectionData | null> {
+	if (!db) return null;
 	const cacheKey = `remote-collection:${subject}`;
 	const cached = await db.remoteData.where('source').equals(cacheKey).toArray();
 	if (cached.length === 0) return null;

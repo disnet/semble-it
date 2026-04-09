@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/auth.svelte';
-	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata, getCacheTimestamp } from '$lib/pds';
+	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata } from '$lib/pds';
 	import { openDb } from '$lib/db';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
@@ -12,8 +12,6 @@
 	let { children } = $props();
 
 	const isLoginPage = $derived($page.url.pathname === '/login');
-	let syncing = $state(false);
-
 	onMount(async () => {
 		// Reload when a new service worker takes control so updates are applied immediately
 		let reloading = false;
@@ -27,21 +25,15 @@
 		await auth.init();
 		if (auth.isLoggedIn && auth.session) {
 			openDb(auth.session.did);
-			// Only auto-sync on first-ever load (no cached data yet)
-			const lastSync = await getCacheTimestamp('pds-sync');
-			if (!lastSync) {
-				syncing = true;
-				try {
-					await syncFromPDS(auth.session);
-					resolveFollowMetadata(auth.session).catch(console.error);
-				} catch (e) {
+			// Background sync on every load — UI renders from cache immediately
+			const session = auth.session;
+			syncFromPDS(session)
+				.then(() => resolveFollowMetadata(session))
+				.catch(async (e) => {
 					if (!(await handleExpiredAuth(e))) {
 						console.error('PDS sync failed:', e);
 					}
-				} finally {
-					syncing = false;
-				}
-			}
+				});
 		}
 		if (!auth.isLoggedIn && !isLoginPage) {
 			goto('/login', { replaceState: true });

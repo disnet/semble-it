@@ -12,7 +12,9 @@
 
 	const PAGE_SIZE = 20;
 	type FilterValue = CardType | 'ALL';
+	type SortValue = 'newest' | 'oldest';
 	let filter: FilterValue = $state('ALL');
+	let sort: SortValue = $state('newest');
 	let search = $state('');
 	let visibleCount = $state(PAGE_SIZE);
 
@@ -39,12 +41,16 @@
 				return false;
 			});
 		}
+		if (sort === 'oldest') {
+			cards = [...cards].reverse();
+		}
 		return cards;
 	});
 
 	// Reset visible count when filters change
 	$effect(() => {
 		filter;
+		sort;
 		search;
 		visibleCount = PAGE_SIZE;
 	});
@@ -62,9 +68,8 @@
 <PageHeader title="Cards" />
 <RefreshBar cacheKey="pds-sync" onrefresh={handleRefresh} />
 
-<CardFilterBar bind:value={filter} />
-
-<div class="search-bar">
+<div class="toolbar">
+	<CardFilterBar bind:filter bind:sort />
 	<input type="search" placeholder="Search cards…" bind:value={search} class="search-input" />
 </div>
 
@@ -85,13 +90,17 @@
 </div>
 
 <style>
-	.search-bar {
-		padding: 0 var(--space-md) var(--space-sm);
+	.toolbar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
 	}
 
 	.search-input {
-		width: 100%;
-		padding: var(--space-sm) var(--space-md);
+		flex: 1;
+		min-width: 0;
+		padding: 6px var(--space-md);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-full);
 		background: var(--color-surface);

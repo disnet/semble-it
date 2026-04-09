@@ -8,9 +8,19 @@
 	import { LayoutGrid, Plus, LogOut, Users } from 'lucide-svelte';
 
 	const collections = liveQuery(() => db.collections.orderBy('name').toArray());
-	const followedUsers = liveQuery(() => db.follows.where('subjectType').equals('user').toArray());
+	const followedUsers = liveQuery(() =>
+		db.follows
+			.where('subjectType')
+			.equals('user')
+			.filter((f) => !!f.displayName)
+			.toArray()
+	);
 	const followedCollections = liveQuery(() =>
-		db.follows.where('subjectType').equals('collection').toArray()
+		db.follows
+			.where('subjectType')
+			.equals('collection')
+			.filter((f) => !!f.displayName)
+			.toArray()
 	);
 
 	function close() {
