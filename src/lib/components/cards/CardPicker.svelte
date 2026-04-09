@@ -7,6 +7,7 @@
 	let {
 		selected = $bindable<string | undefined>(undefined),
 		excludeId = undefined as string | undefined,
+		excludeIds = [] as string[],
 		label = 'Select a card'
 	} = $props();
 
@@ -17,7 +18,7 @@
 	const allCards = liveQuery(() => db.cards.orderBy('createdAt').reverse().toArray());
 
 	let filtered = $derived.by(() => {
-		let cards = ($allCards ?? []).filter((c) => c.cardId !== excludeId);
+		let cards = ($allCards ?? []).filter((c) => c.cardId !== excludeId && !excludeIds.includes(c.cardId));
 		if (search.trim()) {
 			const q = search.toLowerCase();
 			cards = cards.filter((c) => {

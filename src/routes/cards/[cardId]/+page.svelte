@@ -4,10 +4,12 @@
 	import { liveQuery } from 'dexie';
 	import { db } from '$lib/db';
 	import { auth } from '$lib/auth.svelte';
-	import { updateCardInPDS, deleteCardFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS } from '$lib/pds';
+	import { updateCardInPDS, deleteCardFromPDS, createCollectionLinkInPDS, deleteCollectionLinkFromPDS, deleteConnectionFromPDS, createConnectionInPDS } from '$lib/pds';
 	import type { Card } from '$lib/types';
+	import { CONNECTION_TYPES, type ConnectionType } from '$lib/types';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 	import CardTypeBadge from '$lib/components/cards/CardTypeBadge.svelte';
+	import CardPicker from '$lib/components/cards/CardPicker.svelte';
 	import BottomSheet from '$lib/components/shared/BottomSheet.svelte';
 
 	const cardId = $derived($page.params.cardId!);
@@ -34,6 +36,60 @@
 	let showCollections = $state(false);
 	let editing = $state(false);
 	let confirmDelete = $state(false);
+
+	// Inline connection form
+	let newConnType = $state<ConnectionType>('RELATED');
+	let newConnTarget = $state<string | undefined>(undefined);
+	let creatingConn = $state(false);
+	let confirmDeleteConn = $state<string | null>(null);
+
+	async function deleteConnection(connId: string) {
+		const conn = await db.connections.get(connId);
+		if (auth.session && conn) await deleteConnectionFromPDS(auth.session, conn);
+		await db.connections.delete(connId);
+		confirmDeleteConn = null;
+	}
+
+	// Cards already connected with the selected type (as source)
+	let connectedWithType = $derived.by(() => {
+		const conns = $cardConnections?.asSource ?? [];
+		return conns.filter((c) => c.type === newConnType).map((c) => c.targetCardId);
+	});
+
+	$effect(() => {
+		if (!newConnTarget || !newConnType || newConnTarget === cardId) return;
+		const targetId = newConnTarget;
+		const type = newConnType;
+		// Reset immediately so the picker clears
+		newConnTarget = undefined;
+		// Create the connection
+		createConnection(targetId, type);
+	});
+
+	async function createConnection(targetId: string, type: ConnectionType) {
+		creatingConn = true;
+		try {
+			const connectionId = crypto.randomUUID();
+			const now = new Date();
+			const connection: import('$lib/types').Connection = {
+				connectionId,
+				sourceCardId: cardId,
+				targetCardId: targetId,
+				type,
+				createdAt: now,
+				updatedAt: now
+			};
+			if (auth.session) {
+				const ref = await createConnectionInPDS(auth.session, connection);
+				connection.uri = ref.uri;
+				connection.cid = ref.cid;
+				connection.connectionId = ref.uri.split('/').pop()!;
+			}
+			await db.connections.add(connection);
+		} finally {
+			creatingConn = false;
+		}
+	}
 
 	// Edit fields
 	let editUrl = $state('');
@@ -217,25 +273,54 @@
 		<section class="section">
 			<div class="section-header">
 				<h4 class="section-title">Connections</h4>
-				<a href="/connections/new?source={cardId}" class="section-action">Add</a>
+			</div>
+			<div class="inline-conn-form">
+				<select class="conn-type-select" bind:value={newConnType}>
+					{#each CONNECTION_TYPES as t}
+						<option value={t}>{t.replace('_', ' ')}</option>
+					{/each}
+				</select>
+				<div class="conn-picker-wrap">
+					<CardPicker bind:selected={newConnTarget} excludeId={cardId} excludeIds={connectedWithType} label="" />
+				</div>
 			</div>
 			{#if ($cardConnections?.asSource ?? []).length === 0 && ($cardConnections?.asTarget ?? []).length === 0}
-				<p class="section-empty">No connections</p>
+				<p class="section-empty">No connections yet</p>
 			{:else}
 				<div class="connection-list">
 					{#each $cardConnections?.asSource ?? [] as conn}
-						<a href="/connections/{conn.connectionId}" class="connection-item">
-							<span class="conn-type">{conn.type}</span>
-							<span class="conn-arrow">→</span>
-							<span class="conn-card">{getEndpointName(conn.targetCardId)}</span>
-						</a>
+						<div class="connection-row">
+							<a href="/connections/{conn.connectionId}" class="connection-item">
+								<span class="conn-type">{conn.type}</span>
+								<span class="conn-arrow">→</span>
+								<span class="conn-card">{getEndpointName(conn.targetCardId)}</span>
+							</a>
+							{#if confirmDeleteConn === conn.connectionId}
+								<span class="conn-confirm">
+									<button class="conn-confirm-btn danger" onclick={() => deleteConnection(conn.connectionId)}>Delete</button>
+									<button class="conn-confirm-btn" onclick={() => (confirmDeleteConn = null)}>Cancel</button>
+								</span>
+							{:else}
+								<button class="conn-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
+							{/if}
+						</div>
 					{/each}
 					{#each $cardConnections?.asTarget ?? [] as conn}
-						<a href="/connections/{conn.connectionId}" class="connection-item">
-							<span class="conn-card">{getEndpointName(conn.sourceCardId)}</span>
-							<span class="conn-arrow">→</span>
-							<span class="conn-type">{conn.type}</span>
-						</a>
+						<div class="connection-row">
+							<a href="/connections/{conn.connectionId}" class="connection-item">
+								<span class="conn-card">{getEndpointName(conn.sourceCardId)}</span>
+								<span class="conn-arrow">→</span>
+								<span class="conn-type">{conn.type}</span>
+							</a>
+							{#if confirmDeleteConn === conn.connectionId}
+								<span class="conn-confirm">
+									<button class="conn-confirm-btn danger" onclick={() => deleteConnection(conn.connectionId)}>Delete</button>
+									<button class="conn-confirm-btn" onclick={() => (confirmDeleteConn = null)}>Cancel</button>
+								</span>
+							{:else}
+								<button class="conn-delete" onclick={() => (confirmDeleteConn = conn.connectionId)} title="Delete connection">&times;</button>
+							{/if}
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -398,9 +483,51 @@
 		text-decoration: none;
 	}
 
+	.inline-conn-form {
+		display: flex;
+		gap: var(--space-sm);
+		align-items: flex-start;
+		margin-bottom: var(--space-md);
+	}
+
+	.conn-type-select {
+		flex-shrink: 0;
+		padding: var(--space-sm) var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		font-size: 0.75rem;
+		outline: none;
+		transition: border-color 0.15s;
+		max-width: 110px;
+	}
+
+	.conn-type-select:focus {
+		border-color: var(--color-primary);
+	}
+
+	.conn-picker-wrap {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.conn-picker-wrap :global(.picker) {
+		margin-bottom: 0;
+	}
+
+	.conn-picker-wrap :global(.picker-label) {
+		display: none;
+	}
+
 	.connection-list {
 		display: flex;
 		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.connection-row {
+		display: flex;
+		align-items: center;
 		gap: var(--space-xs);
 	}
 
@@ -414,10 +541,53 @@
 		text-decoration: none;
 		color: var(--color-text);
 		transition: background 0.15s;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.connection-item:hover {
 		background: var(--color-bg);
+	}
+
+	.conn-delete {
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-full);
+		font-size: 1rem;
+		color: var(--color-text-secondary);
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.conn-delete:hover {
+		background: var(--color-danger-light);
+		color: var(--color-danger);
+	}
+
+	.conn-confirm {
+		display: flex;
+		gap: var(--space-xs);
+		flex-shrink: 0;
+	}
+
+	.conn-confirm-btn {
+		padding: 2px 8px;
+		border-radius: var(--radius-md);
+		font-size: 0.6875rem;
+		font-weight: 500;
+		border: 1px solid var(--color-border);
+	}
+
+	.conn-confirm-btn.danger {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
+	}
+
+	.conn-confirm-btn.danger:hover {
+		background: var(--color-danger-light);
 	}
 
 	.conn-type {
