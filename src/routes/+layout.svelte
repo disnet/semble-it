@@ -14,6 +14,8 @@
 	let { children } = $props();
 
 	const isLoginPage = $derived($page.url.pathname === '/login');
+	const isLandingPage = $derived($page.url.pathname === '/');
+	const isPublicPage = $derived(isLoginPage || isLandingPage);
 
 	onMount(async () => {
 		// Reload when a new service worker takes control so updates are applied immediately
@@ -49,14 +51,14 @@
 				}
 			});
 		}
-		if (!auth.isLoggedIn && !isLoginPage) {
+		if (!auth.isLoggedIn && !isPublicPage) {
 			goto('/login', { replaceState: true });
 		}
 	});
 
 	// Redirect to login if session is lost
 	$effect(() => {
-		if (!auth.loading && !auth.isLoggedIn && !isLoginPage) {
+		if (!auth.loading && !auth.isLoggedIn && !isPublicPage) {
 			goto('/login', { replaceState: true });
 		}
 	});
@@ -71,7 +73,7 @@
 	<div class="loading-screen">
 		<p class="loading-text">Loading…</p>
 	</div>
-{:else if isLoginPage}
+{:else if isPublicPage && !auth.isLoggedIn}
 	{@render children()}
 {:else if auth.isLoggedIn}
 	<Sidebar />
