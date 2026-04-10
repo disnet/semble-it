@@ -1,17 +1,30 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Menu, Plus } from 'lucide-svelte';
-	import { sidebarState } from '$lib/sidebar-state.svelte';
+	import { Plus, ChevronDown } from 'lucide-svelte';
+	import { navPickerState } from '$lib/nav-picker-state.svelte';
 	import type { Snippet } from 'svelte';
 
-	let { title = '', actions }: { title?: string; actions?: Snippet } = $props();
+	let {
+		title = '',
+		pickable = false,
+		actions
+	}: { title?: string; pickable?: boolean; actions?: Snippet } = $props();
 </script>
 
 <header class="page-header">
-	<button class="menu-btn" onclick={() => sidebarState.toggle()} aria-label="Open menu">
-		<Menu size={24} />
-	</button>
-	<h2 class="page-title">{title}</h2>
+	{#if pickable}
+		<button
+			class="page-title picker-trigger"
+			onclick={() => navPickerState.toggle()}
+			aria-label="Switch view"
+			aria-haspopup="dialog"
+		>
+			<span class="title-text">{title}</span>
+			<ChevronDown size={18} class="title-chevron" />
+		</button>
+	{:else}
+		<h2 class="page-title">{title}</h2>
+	{/if}
 	{#if actions}
 		<div class="header-actions">
 			{@render actions()}
@@ -36,26 +49,6 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 
-	.menu-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-md);
-		transition: background 0.15s;
-	}
-
-	.menu-btn:hover {
-		background: var(--color-primary-light);
-	}
-
-	@media (min-width: 768px) {
-		.menu-btn {
-			display: none;
-		}
-	}
-
 	.page-title {
 		flex: 1;
 		font-size: 1.125rem;
@@ -63,6 +56,40 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		min-width: 0;
+	}
+
+	.picker-trigger {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		background: none;
+		padding: 6px 10px;
+		margin: 0 -10px;
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.picker-trigger:hover,
+	.picker-trigger:active {
+		background: var(--color-primary-light);
+	}
+
+	.picker-trigger .title-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	@media (min-width: 768px) {
+		.picker-trigger {
+			pointer-events: none;
+		}
+		.picker-trigger :global(.title-chevron) {
+			display: none;
+		}
 	}
 
 	.header-actions {

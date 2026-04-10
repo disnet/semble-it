@@ -213,7 +213,7 @@
 	}
 </script>
 
-<PageHeader title={collectionData?.name ?? 'Collection'}>
+<PageHeader title={collectionData?.name ?? 'Collection'} pickable>
 	{#snippet actions()}
 		<span class="header-card-count">{memberCards.length} card{memberCards.length !== 1 ? 's' : ''}</span>
 		<div class="more-container" bind:this={moreContainerEl}>

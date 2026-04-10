@@ -51,7 +51,7 @@
 	}
 </script>
 
-<PageHeader title={collectionName} />
+<PageHeader title={collectionName} pickable />
 <RefreshBar cacheKey={`remote-collection:${subject}`} onrefresh={handleRefresh} />
 
 <div class="detail-container">

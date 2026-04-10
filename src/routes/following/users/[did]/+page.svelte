@@ -47,7 +47,7 @@
 	}
 </script>
 
-<PageHeader title={displayName} />
+<PageHeader title={displayName} pickable />
 <RefreshBar cacheKey={`remote-user:${did}`} onrefresh={handleRefresh} />
 
 <div class="detail-container">

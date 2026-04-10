@@ -65,7 +65,7 @@
 	}
 </script>
 
-<PageHeader title="Cards" />
+<PageHeader title="All Cards" pickable />
 <RefreshBar cacheKey="pds-sync" onrefresh={handleRefresh} />
 
 <div class="toolbar">

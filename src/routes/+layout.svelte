@@ -8,6 +8,7 @@
 	import { flushQueue } from '$lib/writeQueue';
 	import { openDb } from '$lib/db';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
+	import NavPicker from '$lib/components/layout/NavPicker.svelte';
 
 
 	let { children } = $props();
@@ -74,6 +75,7 @@
 	{@render children()}
 {:else if auth.isLoggedIn}
 	<Sidebar />
+	<NavPicker />
 
 	<main class="main-content">
 		{@render children()}
