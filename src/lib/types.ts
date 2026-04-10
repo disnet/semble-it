@@ -90,6 +90,7 @@ export interface Connection {
 export interface CacheMetadata {
 	key: string;
 	fetchedAt: Date;
+	rev?: string;
 }
 
 export interface RemoteDataCache {

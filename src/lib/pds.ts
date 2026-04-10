@@ -12,6 +12,69 @@ function isExpiredAuthError(e: unknown): boolean {
 	return message.includes('expired') || message.includes('invalid token') || message.includes('token revoked');
 }
 
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run `fn` over `items` with at most `limit` tasks in flight at once,
+ * preserving input order in the returned results. Used to bound how many
+ * paginators we fan out against the PDS so we don't re-create the 429
+ * pressure that `withRetry` is papering over.
+ */
+async function parallelMap<T, R>(
+	items: T[],
+	limit: number,
+	fn: (item: T) => Promise<R>
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let next = 0;
+	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+		while (true) {
+			const idx = next++;
+			if (idx >= items.length) return;
+			results[idx] = await fn(items[idx]);
+		}
+	});
+	await Promise.all(workers);
+	return results;
+}
+
+function isRateLimitError(e: unknown): boolean {
+	const status = (e as any)?.status ?? (e as any)?.response?.status;
+	return status === 429;
+}
+
+/**
+ * Retry a PDS call on 429 rate-limit errors with exponential backoff.
+ * Honors a `retryAfter` field on the error (seconds) when present.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 5): Promise<T> {
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			return await fn();
+		} catch (e) {
+			const isLast = attempt === maxAttempts - 1;
+			if (isLast || !isRateLimitError(e)) throw e;
+			const retryAfter =
+				(e as any)?.retryAfter ??
+				(e as any)?.headers?.['retry-after'] ??
+				(e as any)?.response?.headers?.['retry-after'];
+			// Retry-After is usually seconds, but the spec also permits an HTTP
+			// date. Number() on a date string returns NaN, which would collapse
+			// the sleep to 0 and defeat the backoff — fall through to exponential
+			// in that case.
+			const retryAfterSec = Number(retryAfter);
+			const delayMs =
+				retryAfter && Number.isFinite(retryAfterSec) && retryAfterSec > 0
+					? Math.min(retryAfterSec * 1000, 60000)
+					: Math.min(1000 * 2 ** attempt, 30000);
+			await sleep(delayMs);
+		}
+	}
+	throw new Error('withRetry: unreachable');
+}
+
 /**
  * Check if an error indicates an expired/invalid auth session.
  * If so, trigger logout and return true.
@@ -389,31 +452,90 @@ function recordToFollow(uri: string, cid: string, value: Record<string, unknown>
 
 // --- Sync: pull all records from PDS into local DB ---
 
-async function listAllRecords(
+type PdsRecord = { uri: string; cid: string; value: Record<string, unknown> };
+
+async function listRecordsPage(
 	agent: Agent,
 	repo: string,
-	collection: string
-): Promise<Array<{ uri: string; cid: string; value: Record<string, unknown> }>> {
-	const records: Array<{ uri: string; cid: string; value: Record<string, unknown> }> = [];
-	let cursor: string | undefined;
-
-	do {
-		const res = await agent.com.atproto.repo.listRecords({
+	collection: string,
+	cursor?: string
+): Promise<{ records: PdsRecord[]; cursor?: string }> {
+	const res = await withRetry(() =>
+		agent.com.atproto.repo.listRecords({
 			repo,
 			collection,
 			limit: 100,
 			cursor
-		});
-		for (const rec of res.data.records) {
-			records.push({ uri: rec.uri, cid: rec.cid, value: rec.value as Record<string, unknown> });
-		}
-		cursor = res.data.cursor;
-	} while (cursor);
+		})
+	);
+	return {
+		records: res.data.records.map((r) => ({
+			uri: r.uri,
+			cid: r.cid,
+			value: r.value as Record<string, unknown>
+		})),
+		cursor: res.data.cursor
+	};
+}
 
+async function listRecordsAfter(
+	agent: Agent,
+	repo: string,
+	collection: string,
+	startCursor?: string
+): Promise<PdsRecord[]> {
+	const records: PdsRecord[] = [];
+	let cursor = startCursor;
+	while (cursor) {
+		const page = await listRecordsPage(agent, repo, collection, cursor);
+		records.push(...page.records);
+		cursor = page.cursor;
+	}
 	return records;
 }
 
-export async function syncFromPDS(session: OAuthSession): Promise<void> {
+async function listAllRecords(
+	agent: Agent,
+	repo: string,
+	collection: string
+): Promise<PdsRecord[]> {
+	const first = await listRecordsPage(agent, repo, collection);
+	const tail = await listRecordsAfter(agent, repo, collection, first.cursor);
+	return [...first.records, ...tail];
+}
+
+function collectionLinkFromRecord(r: PdsRecord): CollectionCard {
+	const val = r.value;
+	const cardRef = val.card as Record<string, unknown>;
+	const colRef = val.collection as Record<string, unknown>;
+	return {
+		cardId: rkeyFromUri(cardRef.uri as string),
+		collectionId: rkeyFromUri(colRef.uri as string),
+		addedAt: new Date(val.addedAt as string),
+		uri: r.uri,
+		cid: r.cid
+	};
+}
+
+function followFromRecord(
+	r: PdsRecord,
+	metadataCache: Map<string, { displayName?: string; avatarUrl?: string }>
+): Follow {
+	const follow = recordToFollow(r.uri, r.cid, r.value);
+	const cached = metadataCache.get(follow.followId);
+	if (cached) {
+		follow.displayName = cached.displayName;
+		follow.avatarUrl = cached.avatarUrl;
+	}
+	return follow;
+}
+
+export type SyncOptions = {
+	/** Called after the first page of each record type has been committed to IndexedDB. */
+	onCheckpoint?: () => void;
+};
+
+export async function syncFromPDS(session: OAuthSession, opts: SyncOptions = {}): Promise<void> {
 	// Guard: don't destructive-sync when there are pending offline writes
 	const pendingCount = await db.writeQueue
 		.where('status')
@@ -441,14 +563,48 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 	const agent = createAgent(session);
 	const repo = session.did;
 
-	const [cardRecords, collectionRecords, collectionLinkRecords, connectionRecords, followRecords] =
-		await Promise.all([
-			listAllRecords(agent, repo, NSID.card),
-			listAllRecords(agent, repo, NSID.collection),
-			listAllRecords(agent, repo, NSID.collectionLink),
-			listAllRecords(agent, repo, NSID.connection),
-			listAllRecords(agent, repo, NSID.follow)
-		]);
+	// Incremental sync: compare the repo's current rev against the last
+	// successfully synced rev. If unchanged, skip the full scan entirely —
+	// this is the common case for returning users and drops the request
+	// count from O(records/100) to 1.
+	let currentRev: string | undefined;
+	try {
+		const latest = await withRetry(() => agent.com.atproto.sync.getLatestCommit({ did: repo }));
+		currentRev = latest.data.rev;
+		const stored = await db.cacheMetadata.get('pds-sync');
+		if (stored?.rev && stored.rev === currentRev) {
+			return;
+		}
+	} catch (e) {
+		// If the rev check fails (e.g. endpoint unavailable), fall through to
+		// a full sync rather than blocking the user.
+		console.warn('getLatestCommit failed, falling back to full sync:', e);
+	}
+
+	// Capture the existing follow display metadata before we clear, so we can
+	// restore it for both the checkpoint and the tail.
+	const existingFollows = await db.follows.toArray();
+	const followMetadataCache = new Map(
+		existingFollows
+			.filter((f) => f.displayName)
+			.map((f) => [
+				f.followId,
+				{ displayName: f.displayName, avatarUrl: f.avatarUrl }
+			])
+	);
+
+	// Phase 1: fetch the first page of each entity type (cards, collections,
+	// connections, follows) in parallel and commit. Collection links are
+	// intentionally skipped here — they reference cards/collections by rkey,
+	// and committing links before their parents are fully loaded would leave
+	// the UI showing joins that dangle into the tail. Links are instead
+	// fetched in full during phase 2, after all parents have landed.
+	const [cardPage1, collectionPage1, connectionPage1, followPage1] = await Promise.all([
+		listRecordsPage(agent, repo, NSID.card),
+		listRecordsPage(agent, repo, NSID.collection),
+		listRecordsPage(agent, repo, NSID.connection),
+		listRecordsPage(agent, repo, NSID.follow)
+	]);
 
 	await db.transaction(
 		'rw',
@@ -456,68 +612,119 @@ export async function syncFromPDS(session: OAuthSession): Promise<void> {
 		async () => {
 			await db.cards.clear();
 			await db.collections.clear();
-			await db.collectionCards.clear();
 			await db.connections.clear();
 			await db.follows.clear();
+			// `collectionCards` is intentionally NOT cleared here — we keep the
+			// previous (stale-but-complete) join rows visible through the tail
+			// phase so the user doesn't see every collection flicker to empty.
+			// Phase 2 swaps them atomically once the full link set is fetched.
 
-			if (cardRecords.length > 0) {
-				await db.cards.bulkAdd(
-					cardRecords.map((r) => recordToCard(r.uri, r.cid, r.value))
-				);
+			if (cardPage1.records.length > 0) {
+				await db.cards.bulkAdd(cardPage1.records.map((r) => recordToCard(r.uri, r.cid, r.value)));
 			}
-
-			if (collectionRecords.length > 0) {
+			if (collectionPage1.records.length > 0) {
 				await db.collections.bulkAdd(
-					collectionRecords.map((r) => recordToCollection(r.uri, r.cid, r.value))
+					collectionPage1.records.map((r) => recordToCollection(r.uri, r.cid, r.value))
 				);
 			}
-
-			if (collectionLinkRecords.length > 0) {
-				await db.collectionCards.bulkAdd(
-					collectionLinkRecords.map((r) => {
-						const val = r.value;
-						const cardRef = val.card as Record<string, unknown>;
-						const colRef = val.collection as Record<string, unknown>;
-						return {
-							cardId: rkeyFromUri(cardRef.uri as string),
-							collectionId: rkeyFromUri(colRef.uri as string),
-							addedAt: new Date(val.addedAt as string),
-							uri: r.uri,
-							cid: r.cid
-						} satisfies CollectionCard;
-					})
-				);
-			}
-
-			if (connectionRecords.length > 0) {
+			if (connectionPage1.records.length > 0) {
 				await db.connections.bulkAdd(
-					connectionRecords.map((r) => recordToConnection(r.uri, r.cid, r.value))
+					connectionPage1.records.map((r) => recordToConnection(r.uri, r.cid, r.value))
 				);
 			}
-
-			if (followRecords.length > 0) {
-				// Preserve cached display metadata from previous sync
-				const existingFollows = await db.follows.toArray();
-				const metadataCache = new Map(
-					existingFollows
-						.filter((f) => f.displayName)
-						.map((f) => [f.followId, { displayName: f.displayName, avatarUrl: f.avatarUrl }])
-				);
-				await db.follows.clear();
+			if (followPage1.records.length > 0) {
 				await db.follows.bulkAdd(
-					followRecords.map((r) => {
-						const follow = recordToFollow(r.uri, r.cid, r.value);
-						const cached = metadataCache.get(follow.followId);
-						if (cached) {
-							follow.displayName = cached.displayName;
-							follow.avatarUrl = cached.avatarUrl;
-						}
-						return follow;
-					})
+					followPage1.records.map((r) => followFromRecord(r, followMetadataCache))
 				);
 			}
 
+			// Write a checkpoint marker so a mid-sync reload still recognizes
+			// that local data exists. The `rev` is intentionally omitted until
+			// the tail completes — otherwise a reload could skip the missing
+			// pages and leave the user with an incomplete library.
 			await db.cacheMetadata.put({ key: 'pds-sync', fetchedAt: new Date() });
+		}
+	);
+
+	opts.onCheckpoint?.();
+
+	// Phase 2: paginate the tail of each entity type, plus the full set of
+	// collection links (which were skipped in phase 1). Links are committed
+	// in the same transaction as the entity tails, so by the time any link
+	// is visible its referenced card and collection are present.
+	//
+	// Concurrency is capped at 2 because the users this code path targets
+	// are exactly the ones getting 429'd — fanning out 5 paginators at once
+	// would re-create the pressure that `withRetry` is papering over.
+	type TailTask =
+		| { kind: 'card' }
+		| { kind: 'collection' }
+		| { kind: 'collectionLink' }
+		| { kind: 'connection' }
+		| { kind: 'follow' };
+	const tasks: TailTask[] = [
+		{ kind: 'card' },
+		{ kind: 'collection' },
+		{ kind: 'collectionLink' },
+		{ kind: 'connection' },
+		{ kind: 'follow' }
+	];
+	const tailResults = await parallelMap(tasks, 2, async (task) => {
+		switch (task.kind) {
+			case 'card':
+				return { kind: task.kind, records: await listRecordsAfter(agent, repo, NSID.card, cardPage1.cursor) };
+			case 'collection':
+				return { kind: task.kind, records: await listRecordsAfter(agent, repo, NSID.collection, collectionPage1.cursor) };
+			case 'collectionLink':
+				return { kind: task.kind, records: await listAllRecords(agent, repo, NSID.collectionLink) };
+			case 'connection':
+				return { kind: task.kind, records: await listRecordsAfter(agent, repo, NSID.connection, connectionPage1.cursor) };
+			case 'follow':
+				return { kind: task.kind, records: await listRecordsAfter(agent, repo, NSID.follow, followPage1.cursor) };
+		}
+	});
+	const byKind = Object.fromEntries(tailResults.map((r) => [r.kind, r.records])) as Record<
+		TailTask['kind'],
+		PdsRecord[]
+	>;
+	const cardTail = byKind.card;
+	const collectionTail = byKind.collection;
+	const collectionLinkAll = byKind.collectionLink;
+	const connectionTail = byKind.connection;
+	const followTail = byKind.follow;
+
+	await db.transaction(
+		'rw',
+		[db.cards, db.collections, db.collectionCards, db.connections, db.follows, db.cacheMetadata],
+		async () => {
+			if (cardTail.length > 0) {
+				await db.cards.bulkPut(cardTail.map((r) => recordToCard(r.uri, r.cid, r.value)));
+			}
+			if (collectionTail.length > 0) {
+				await db.collections.bulkPut(
+					collectionTail.map((r) => recordToCollection(r.uri, r.cid, r.value))
+				);
+			}
+			if (connectionTail.length > 0) {
+				await db.connections.bulkPut(
+					connectionTail.map((r) => recordToConnection(r.uri, r.cid, r.value))
+				);
+			}
+			if (followTail.length > 0) {
+				await db.follows.bulkPut(
+					followTail.map((r) => followFromRecord(r, followMetadataCache))
+				);
+			}
+			// Atomic swap of the collection-link join table: clear the stale
+			// rows carried over from the previous sync and insert the full new
+			// set in the same transaction, so the UI never observes an empty
+			// intermediate state.
+			await db.collectionCards.clear();
+			if (collectionLinkAll.length > 0) {
+				await db.collectionCards.bulkAdd(collectionLinkAll.map(collectionLinkFromRecord));
+			}
+
+			await db.cacheMetadata.put({ key: 'pds-sync', fetchedAt: new Date(), rev: currentRev });
 		}
 	);
 }
@@ -556,9 +763,21 @@ export async function fetchRemoteRecords(
 			limit: '100',
 			...(cursor ? { cursor } : {})
 		});
-		const res = await fetch(`${pds}/xrpc/com.atproto.repo.listRecords?${params}`);
-		if (!res.ok) break;
-		const data = await res.json();
+		const data = await withRetry(async () => {
+			const res = await fetch(`${pds}/xrpc/com.atproto.repo.listRecords?${params}`);
+			if (res.status === 429) {
+				const err: any = new Error('Rate limited');
+				err.status = 429;
+				err.retryAfter = res.headers.get('retry-after') ?? undefined;
+				throw err;
+			}
+			if (!res.ok) {
+				const err: any = new Error(`listRecords failed: ${res.status}`);
+				err.status = res.status;
+				throw err;
+			}
+			return res.json();
+		});
 		for (const rec of data.records ?? []) {
 			records.push({ uri: rec.uri, cid: rec.cid, value: rec.value });
 		}
