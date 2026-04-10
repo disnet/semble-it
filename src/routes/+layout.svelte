@@ -7,65 +7,12 @@
 	import { syncFromPDS, handleExpiredAuth, resolveFollowMetadata } from '$lib/pds';
 	import { flushQueue } from '$lib/writeQueue';
 	import { openDb } from '$lib/db';
-	import { sidebarState } from '$lib/sidebar-state.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 
 
 	let { children } = $props();
 
 	const isLoginPage = $derived($page.url.pathname === '/login');
-
-	// --- mobile swipe gesture for sidebar ---
-	let windowWidth = $state(1024);
-	let isMobile = $derived(windowWidth < 768);
-	let touchStartX = 0;
-	let touchStartY = 0;
-	const SWIPE_EDGE_ZONE = 30;
-	const SWIPE_THRESHOLD = 60;
-
-	function handleTouchStart(e: TouchEvent) {
-		if (!isMobile) return;
-		const touch = e.touches[0];
-		touchStartX = touch.clientX;
-		touchStartY = touch.clientY;
-		sidebarState.swipeOffset = 0;
-		sidebarState.swiping = false;
-
-		// Only start swipe-to-open from the left edge
-		if (!sidebarState.open && touchStartX > SWIPE_EDGE_ZONE) return;
-		sidebarState.swiping = true;
-	}
-
-	function handleTouchMove(e: TouchEvent) {
-		if (!isMobile || !sidebarState.swiping) return;
-		const touch = e.touches[0];
-		const dx = touch.clientX - touchStartX;
-		const dy = touch.clientY - touchStartY;
-
-		// Cancel if vertical scroll dominates
-		if (Math.abs(dy) > Math.abs(dx) && Math.abs(dx) < 10) {
-			sidebarState.swiping = false;
-			sidebarState.swipeOffset = 0;
-			return;
-		}
-
-		if (sidebarState.open) {
-			sidebarState.swipeOffset = Math.min(0, dx);
-		} else {
-			sidebarState.swipeOffset = Math.max(0, dx);
-		}
-	}
-
-	function handleTouchEnd() {
-		if (!isMobile || !sidebarState.swiping) return;
-		if (sidebarState.open) {
-			if (sidebarState.swipeOffset < -SWIPE_THRESHOLD) sidebarState.open = false;
-		} else {
-			if (sidebarState.swipeOffset > SWIPE_THRESHOLD) sidebarState.open = true;
-		}
-		sidebarState.swipeOffset = 0;
-		sidebarState.swiping = false;
-	}
 
 	onMount(async () => {
 		// Reload when a new service worker takes control so updates are applied immediately
@@ -104,21 +51,6 @@
 		if (!auth.isLoggedIn && !isLoginPage) {
 			goto('/login', { replaceState: true });
 		}
-	});
-
-	onMount(() => {
-		windowWidth = window.innerWidth;
-		const onResize = () => { windowWidth = window.innerWidth; };
-		window.addEventListener('resize', onResize);
-		document.addEventListener('touchstart', handleTouchStart, { passive: true });
-		document.addEventListener('touchmove', handleTouchMove, { passive: true });
-		document.addEventListener('touchend', handleTouchEnd, { passive: true });
-		return () => {
-			window.removeEventListener('resize', onResize);
-			document.removeEventListener('touchstart', handleTouchStart);
-			document.removeEventListener('touchmove', handleTouchMove);
-			document.removeEventListener('touchend', handleTouchEnd);
-		};
 	});
 
 	// Redirect to login if session is lost
