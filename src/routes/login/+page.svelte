@@ -1,8 +1,72 @@
 <script lang="ts">
 	import { auth } from '$lib/auth.svelte';
 
+	type Suggestion = {
+		did: string;
+		handle: string;
+		displayName?: string;
+		avatar?: string;
+	};
+
 	let handle = $state('');
 	let loggingIn = $state(false);
+	let suggestions = $state<Suggestion[]>([]);
+	let showSuggestions = $state(false);
+	let activeIndex = $state(-1);
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+	let searchSeq = 0;
+
+	async function fetchSuggestions(q: string) {
+		const seq = ++searchSeq;
+		try {
+			const res = await fetch(
+				`https://public.api.bsky.app/xrpc/app.bsky.actor.searchActorsTypeahead?q=${encodeURIComponent(q)}&limit=8`
+			);
+			if (!res.ok) return;
+			const data = await res.json();
+			if (seq !== searchSeq) return;
+			suggestions = (data.actors ?? []) as Suggestion[];
+			activeIndex = -1;
+		} catch {
+			// ignore network errors — autocomplete is best-effort
+		}
+	}
+
+	function onInput() {
+		const q = handle.trim().replace(/^@/, '');
+		clearTimeout(debounceTimer);
+		if (!q) {
+			suggestions = [];
+			showSuggestions = false;
+			return;
+		}
+		showSuggestions = true;
+		debounceTimer = setTimeout(() => fetchSuggestions(q), 200);
+	}
+
+	function pick(s: Suggestion) {
+		handle = s.handle;
+		suggestions = [];
+		showSuggestions = false;
+		activeIndex = -1;
+	}
+
+	function onKeydown(e: KeyboardEvent) {
+		if (!showSuggestions || suggestions.length === 0) return;
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			activeIndex = (activeIndex + 1) % suggestions.length;
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			activeIndex = (activeIndex - 1 + suggestions.length) % suggestions.length;
+		} else if (e.key === 'Enter' && activeIndex >= 0) {
+			e.preventDefault();
+			pick(suggestions[activeIndex]);
+		} else if (e.key === 'Escape') {
+			showSuggestions = false;
+			activeIndex = -1;
+		}
+	}
 
 	async function login() {
 		if (!handle.trim()) return;
@@ -23,15 +87,51 @@
 		<form class="login-form" onsubmit={(e) => { e.preventDefault(); login(); }}>
 			<label class="field">
 				<span class="field-label">Handle</span>
-				<input
-					type="text"
-					bind:value={handle}
-					placeholder="you.bsky.social"
-					class="field-input"
-					autocapitalize="none"
-					autocorrect="off"
-					spellcheck="false"
-				/>
+				<div class="field-wrap">
+					<input
+						type="text"
+						bind:value={handle}
+						oninput={onInput}
+						onkeydown={onKeydown}
+						onfocus={() => { if (suggestions.length) showSuggestions = true; }}
+						onblur={() => setTimeout(() => { showSuggestions = false; }, 150)}
+						placeholder="you.bsky.social"
+						class="field-input"
+						autocapitalize="none"
+						autocorrect="off"
+						spellcheck="false"
+						autocomplete="off"
+						role="combobox"
+						aria-expanded={showSuggestions && suggestions.length > 0}
+						aria-autocomplete="list"
+						aria-controls="handle-suggestions"
+					/>
+					{#if showSuggestions && suggestions.length > 0}
+						<ul id="handle-suggestions" class="suggestions" role="listbox">
+							{#each suggestions as s, i (s.did)}
+								<li
+									class="suggestion"
+									class:active={i === activeIndex}
+									role="option"
+									aria-selected={i === activeIndex}
+									onmousedown={(e) => { e.preventDefault(); pick(s); }}
+								>
+									{#if s.avatar}
+										<img src={s.avatar} alt="" class="suggestion-avatar" />
+									{:else}
+										<div class="suggestion-avatar suggestion-avatar-empty"></div>
+									{/if}
+									<div class="suggestion-text">
+										{#if s.displayName}
+											<div class="suggestion-name">{s.displayName}</div>
+										{/if}
+										<div class="suggestion-handle">@{s.handle}</div>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
 			</label>
 
 			{#if auth.error}
@@ -112,6 +212,75 @@
 
 	.field-input:focus {
 		border-color: var(--color-primary);
+	}
+
+	.field-wrap {
+		position: relative;
+	}
+
+	.suggestions {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		right: 0;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		list-style: none;
+		margin: 0;
+		padding: 4px;
+		max-height: 280px;
+		overflow-y: auto;
+		z-index: 10;
+	}
+
+	.suggestion {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+	}
+
+	.suggestion:hover,
+	.suggestion.active {
+		background: var(--color-bg);
+	}
+
+	.suggestion-avatar {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		flex-shrink: 0;
+		object-fit: cover;
+	}
+
+	.suggestion-avatar-empty {
+		background: var(--color-border);
+	}
+
+	.suggestion-text {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.suggestion-name {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.suggestion-handle {
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.error-msg {
