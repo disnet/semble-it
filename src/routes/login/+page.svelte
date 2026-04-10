@@ -86,7 +86,7 @@
 
 		<form class="login-form" onsubmit={(e) => { e.preventDefault(); login(); }}>
 			<label class="field">
-				<span class="field-label">Handle</span>
+				<span class="field-label">Atmosphere Account</span>
 				<div class="field-wrap">
 					<input
 						type="text"
@@ -139,12 +139,12 @@
 			{/if}
 
 			<button class="login-btn" type="submit" disabled={loggingIn || !handle.trim()}>
-				{loggingIn ? 'Redirecting…' : 'Sign in with AT Protocol'}
+				{loggingIn ? 'Redirecting…' : 'Login'}
 			</button>
 		</form>
 
 		<p class="login-note">
-			You'll be redirected to your AT Protocol server to authorize access.
+			Login with your Atmosphere Account (Bluesky, Blacksky, Tangled, etc.). You'll be redirected to your AT Protocol server to authorize access.
 		</p>
 	</div>
 </div>

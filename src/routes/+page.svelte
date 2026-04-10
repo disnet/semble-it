@@ -13,7 +13,7 @@
     <div class="landing">
         <header class="nav">
             <div class="brand">SembleIt</div>
-            <a class="nav-link" href="/login">Sign in</a>
+            <a class="nav-link" href="/login">Login</a>
         </header>
 
         <section class="hero">
@@ -24,7 +24,7 @@
                     <a href="https://semble.so" target="_blank" rel="noopener">semble</a>
                 </p>
                 <div class="cta-row">
-                    <a class="cta-primary" href="/login">Sign in with AT Protocol</a>
+                    <a class="cta-primary" href="/login">Login</a>
                     <a
                         class="cta-secondary"
                         href="https://github.com/disnet/semble-it"
@@ -77,7 +77,7 @@
 
         <footer class="footer">
             <span>© SembleIt</span>
-            <a href="/login">Sign in</a>
+            <a href="/login">Login</a>
         </footer>
     </div>
 {/if}
