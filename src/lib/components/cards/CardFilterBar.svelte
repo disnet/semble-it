@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { CardType } from '$lib/types';
 
-	type FilterValue = CardType | 'ALL';
+	type FilterValue = CardType | 'ALL' | 'UNCOLLECTED';
 	type SortValue = 'newest' | 'oldest';
 
 	let {
@@ -14,7 +14,8 @@
 	const types: { label: string; value: FilterValue }[] = [
 		{ label: 'All', value: 'ALL' },
 		{ label: 'URL', value: 'URL' },
-		{ label: 'Note', value: 'NOTE' }
+		{ label: 'Note', value: 'NOTE' },
+		{ label: 'No collection', value: 'UNCOLLECTED' }
 	];
 
 	const sorts: { label: string; value: SortValue }[] = [

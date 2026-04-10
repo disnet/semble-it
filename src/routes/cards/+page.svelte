@@ -11,7 +11,7 @@
 	import ScrollSentinel from '$lib/components/shared/ScrollSentinel.svelte';
 
 	const PAGE_SIZE = 20;
-	type FilterValue = CardType | 'ALL';
+	type FilterValue = CardType | 'ALL' | 'UNCOLLECTED';
 	type SortValue = 'newest' | 'oldest';
 	let filter: FilterValue = $state('ALL');
 	let sort: SortValue = $state('newest');
@@ -19,10 +19,17 @@
 	let visibleCount = $state(PAGE_SIZE);
 
 	const allCards = liveQuery(() => db.cards.orderBy('createdAt').reverse().toArray());
+	const collectedCardIds = liveQuery(async () => {
+		const entries = await db.collectionCards.toArray();
+		return new Set(entries.map((e) => e.cardId));
+	});
 
 	let filteredCards = $derived.by(() => {
 		let cards = $allCards ?? [];
-		if (filter !== 'ALL') {
+		if (filter === 'UNCOLLECTED') {
+			const collected = $collectedCardIds ?? new Set<string>();
+			cards = cards.filter((c) => !collected.has(c.cardId));
+		} else if (filter !== 'ALL') {
 			cards = cards.filter((c) => c.type === filter);
 		}
 		if (search.trim()) {
