@@ -38,12 +38,23 @@
 	}
 </script>
 
-{#if sidebarState.open}
+{#if sidebarState.open || sidebarState.swiping}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="overlay" onclick={close} onkeydown={() => {}}></div>
+	<div
+		class="overlay"
+		class:swiping={sidebarState.swiping}
+		style:--sidebar-swipe="{sidebarState.swipeOffset}px"
+		onclick={close}
+		onkeydown={() => {}}
+	></div>
 {/if}
 
-<nav class="sidebar" class:open={sidebarState.open}>
+<nav
+	class="sidebar"
+	class:open={sidebarState.open}
+	class:swiping={sidebarState.swiping}
+	style:--sidebar-swipe="{sidebarState.swipeOffset}px"
+>
 	<div class="sidebar-header">
 		<h1 class="logo">SembleIt</h1>
 	</div>
@@ -137,6 +148,10 @@
 		backdrop-filter: blur(2px);
 	}
 
+	.overlay.swiping {
+		transition: none;
+	}
+
 	.sidebar {
 		position: fixed;
 		top: 0;
@@ -154,6 +169,19 @@
 
 	.sidebar.open {
 		transform: translateX(0);
+	}
+
+	.sidebar.swiping {
+		transition: none;
+	}
+
+	@media (max-width: 767px) {
+		.sidebar.swiping:not(.open) {
+			transform: translateX(calc(-100% + var(--sidebar-swipe, 0px)));
+		}
+		.sidebar.swiping.open {
+			transform: translateX(var(--sidebar-swipe, 0px));
+		}
 	}
 
 	@media (min-width: 768px) {
